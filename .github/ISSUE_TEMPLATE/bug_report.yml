@@ -1,0 +1,87 @@
+name: Bug report
+description: Something in UartX does not behave as documented
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Serial problems are much easier to reproduce with the device and the
+        exact port settings, so please fill those in.
+
+  - type: input
+    id: version
+    attributes:
+      label: UartX version
+      description: Shown in Help > About UartX.
+      placeholder: "1.0.0"
+    validations:
+      required: true
+
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: "Windows 11 24H2"
+    validations:
+      required: true
+
+  - type: input
+    id: install
+    attributes:
+      label: How did you install it?
+      placeholder: "Installer, portable zip, or built from source"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you expected, and what you got instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Set the port to COM5 at 115200
+        2. Press Connect
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Device and adapter
+      description: What you were talking to, and through what.
+      placeholder: "STM32F4 dev board via a CP2102 USB-serial adapter"
+    validations:
+      required: true
+
+  - type: textarea
+    id: port-settings
+    attributes:
+      label: Port settings
+      description: From Settings > Serial port.
+      placeholder: |
+        Baud: 115200
+        Data bits: 8
+        Parity: None
+        Stop bits: 1
+        Flow control: None
+    validations:
+      required: true
+
+  - type: textarea
+    id: log
+    attributes:
+      label: Log excerpt
+      description: >
+        A few raw lines from the session log, if the problem involves what was
+        received or how it was displayed. Please remove anything confidential.
+      render: text
+    validations:
+      required: false

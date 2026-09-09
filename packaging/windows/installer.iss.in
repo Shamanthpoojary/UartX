@@ -1,0 +1,72 @@
+; Inno Setup script for @APP_PRODUCT@ -- configured by CMake.
+; Edit installer.iss.in, never the generated installer.iss.
+;
+; Build it with:   cmake --build <build-dir> --target installer
+
+#define MyAppName        "@APP_PRODUCT@"
+#define MyAppVersion     "@PROJECT_VERSION@"
+#define MyAppPublisher   "@APP_PUBLISHER@"
+#define MyAppCopyright   "@APP_COPYRIGHT@"
+#define MyAppExeName     "UartX.exe"
+#define StageDir         "@INSTALLER_STAGE_DIR@"
+#define SourceDir        "@CMAKE_CURRENT_SOURCE_DIR@"
+
+[Setup]
+; Never change AppId -- it is what lets a new build upgrade an existing
+; installation in place instead of leaving two entries behind.
+AppId={{1D9F4A67-2C58-4E31-9B0A-6F3D71C8E524}
+AppName={#MyAppName}
+AppVersion={#MyAppVersion}
+AppVerName={#MyAppName} {#MyAppVersion}
+AppPublisher={#MyAppPublisher}
+AppCopyright={#MyAppCopyright}
+VersionInfoVersion={#MyAppVersion}
+VersionInfoProductName={#MyAppName}
+
+DefaultDirName={autopf}\{#MyAppName}
+DefaultGroupName={#MyAppName}
+DisableProgramGroupPage=yes
+UninstallDisplayName={#MyAppName}
+UninstallDisplayIcon={app}\{#MyAppExeName}
+SetupIconFile={#SourceDir}\resources\uartx.ico
+
+; Shown as an acceptance page during setup, so the licence travels with the
+; installer rather than living only in the repository.
+LicenseFile={#SourceDir}\LICENSE
+
+; Offer "just me" as well as "all users", so the app installs without admin
+; rights when the machine's policy does not grant them.
+PrivilegesRequired=lowest
+PrivilegesRequiredOverridesAllowed=dialog commandline
+
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
+
+OutputBaseFilename=UartX-{#MyAppVersion}-setup
+Compression=lzma2/max
+SolidCompression=yes
+WizardStyle=modern
+ShowLanguageDialog=no
+
+[Languages]
+Name: "english"; MessagesFile: "compiler:Default.isl"
+
+[Tasks]
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+
+[Files]
+; The staged tree is the executable plus every Qt runtime file windeployqt
+; pulled in, so the target machine needs no Qt installation.
+Source: "{#StageDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+[Icons]
+Name: "{group}\{#MyAppName}";              Filename: "{app}\{#MyAppExeName}"
+Name: "{group}\Uninstall {#MyAppName}";    Filename: "{uninstallexe}"
+Name: "{autodesktop}\{#MyAppName}";        Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+
+[Run]
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+
+[UninstallDelete]
+; Qt writes nothing else here, but a stray plugin cache should not be left behind.
+Type: dirifempty; Name: "{app}"

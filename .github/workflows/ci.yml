@@ -1,0 +1,42 @@
+name: CI
+
+# Proves that main and every pull request still build. Packaging is not run
+# here -- that is the Release workflow's job.
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.7.2'
+          arch: 'win64_mingw'
+          tools: 'tools_mingw90'
+          cache: true
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Check the executable was produced
+        shell: pwsh
+        run: |
+          $exe = "build/UartX.exe"
+          if (-not (Test-Path $exe)) { throw "$exe was not built" }
+          Get-Item $exe | Format-List Name, Length, VersionInfo

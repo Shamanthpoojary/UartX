@@ -1,0 +1,28 @@
+# Normalise line endings in the repository to LF, and check out whatever the
+# platform expects. Without this, committing from Windows stores CRLF and the
+# same file then looks modified on any other machine.
+* text=auto eol=lf
+
+# Files that must keep CRLF to work at all.
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+*.iss   text eol=crlf
+*.rc    text eol=crlf
+
+# Files that must keep LF to work at all.
+*.sh    text eol=lf
+
+# Binary assets: never touch the bytes, never try to diff them.
+*.png   binary
+*.ico   binary
+*.exe   binary
+*.zip   binary
+*.deb   binary
+*.AppImage binary
+*.ttf   binary
+*.otf   binary
+
+# Keep GitHub's language statistics about the application, not the packaging.
+packaging/*  linguist-vendored
+scripts/*    linguist-vendored
+docs/*       linguist-documentation

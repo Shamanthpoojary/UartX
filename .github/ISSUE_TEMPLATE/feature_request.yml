@@ -1,0 +1,42 @@
+name: Feature request
+description: Suggest a capability UartX does not have
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: >
+        Describe the debugging task, not the feature. Knowing the underlying
+        problem often turns up a simpler answer than the one first imagined.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like UartX to do?
+    validations:
+      required: true
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: How do you handle it today?
+      description: Existing colour rules, filters, or something outside UartX.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      description: >
+        UartX assumes nothing about a device's message format -- there are no
+        built-in keywords, severity levels or log conventions, and saved logs
+        stay raw.
+      options:
+        - label: >
+            This does not require UartX to assume a particular log format, and
+            does not add formatting to saved log files.
+          required: true
