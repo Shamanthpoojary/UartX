@@ -25,7 +25,7 @@
 namespace App {
 
 inline const QString NAME      = QStringLiteral("UartX");
-inline const QString TAGLINE   = QStringLiteral("UART Terminal & Log Filter");
+inline const QString TAGLINE   = QStringLiteral("UART debugging & log analysis for firmware developers");
 inline const QString VERSION   = QStringLiteral(APP_VERSION_STRING);
 inline const QString DEVELOPER = QStringLiteral("Shamanth");
 inline const QString YEAR      = QStringLiteral("2026");

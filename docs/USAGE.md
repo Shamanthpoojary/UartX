@@ -1,5 +1,17 @@
 # Using UartX
 
+UartX exists to make a busy firmware log readable without editing the firmware.
+The terminal is how the data gets in; **colour rules (section 4) and filter
+windows (section 5) are the point**. If you are in a hurry, connect a port and
+skip straight to those two.
+
+One principle runs through everything below: **you filter the view, never the
+data.** Colour rules, filter windows, timestamps, RX/TX markers and hex display
+all change what you *see*. None of them change what your rules match, and none
+of them change what the session log records — that stays the raw bytes the
+device sent. So you never have to choose between a readable screen and a
+complete capture.
+
 ## 1. Configure the serial port
 
 Set the **Port** and **Baud** rate in the Connection group of the ribbon. Use

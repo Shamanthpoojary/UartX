@@ -1,18 +1,55 @@
-# UartX — UART Terminal &amp; Log Filter
+# UartX
+
+**Turn thousands of lines of firmware output into the information you actually need.**
 
 [![Release](https://img.shields.io/github/v/release/Shamanthpoojary/UartX?sort=semver)](https://github.com/Shamanthpoojary/UartX/releases/latest)
 [![CI](https://github.com/Shamanthpoojary/UartX/actions/workflows/ci.yml/badge.svg)](https://github.com/Shamanthpoojary/UartX/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows-lightgrey)
 
-A general-purpose serial terminal and log viewer. UartX talks to anything that
-speaks UART — a microcontroller, a dev board, a module, a USB-to-serial
-adapter — and makes a busy log readable by colouring the lines you care about.
+UartX is a UART-based debugging and analysis tool built specifically for
+embedded and firmware developers.
 
-UartX assumes **nothing** about your device's message format. There are no
-built-in keywords, severity levels or log conventions: every highlight rule is
-one you define, so it works the same whether your firmware prints `|E| fault`,
-`[ERROR]` or something else entirely.
+## Sound familiar?
+
+Your board is printing at 115200 baud. Six tasks, all logging, all interleaved.
+Somewhere in that wall of text a sensor read is failing — once every few
+minutes, never in the same place twice. You need to see the failure *and* what
+the other tasks were doing when it happened.
+
+So you scroll. Then you stop scrolling and start deleting: comment out the
+chatty task's prints, drop the log level, rebuild, reflash. Now the output is
+readable — and the bug has moved, because you changed the timing. Or it stopped
+reproducing. Or it is still there, but you removed the one line that would have
+explained it.
+
+**That is the trade UartX removes.**
+
+Leave every print in the firmware. Define a rule for what you are hunting, open
+a Filter window, and watch only those lines — live, in their own window — while
+the complete unfiltered stream keeps being written to disk exactly as the device
+sent it.
+
+You filter the view, never the data. When you finally catch the failure, the
+full log is still sitting there with all the context you did not think you would
+need.
+
+## How it works
+
+**1. Say what matters.** A colour rule is a name, a keyword your firmware
+actually prints, and a colour. `|E|` in red. `TASK6` in amber. Nothing is built
+in — UartX assumes nothing about your log format, so the rules are whatever your
+firmware happens to emit.
+
+**2. Open a window on it.** Tick that rule in a Filter window and you see only
+the lines it matches. Open several windows to watch different subsets side by
+side — one for faults, one for a single task, one for a state machine — each
+following the live stream independently.
+
+**3. The full log keeps recording.** The session log holds the raw bytes the
+device sent and nothing else: no timestamps, no direction markers, no hex
+formatting, no colours. Filters, highlighting and display options never touch
+it. What lands on disk is what came off the wire.
 
 ## Install
 
@@ -38,48 +75,59 @@ Get-FileHash UartX-1.0.0-setup.exe -Algorithm SHA256
 > [docs/BUILDING.md](docs/BUILDING.md#code-signing) for why, and what signing
 > would take.
 
+> **No COM ports listed?** That is almost always the USB-serial adapter's driver
+> rather than UartX. Check **Device Manager → Ports (COM & LPT)**. CP210x and
+> FTDI adapters usually install themselves over Windows Update; CH340/CH341
+> clones normally need their driver installed by hand.
+
 ## Quick start
 
 1. Pick the **Port** and **Baud** rate in the ribbon — **Refresh** re-scans
    after you plug a device in.
 2. Press **Connect** (**F2**). Traffic appears live.
 3. Open *Tools > Color rules* (**Ctrl+R**) and add a rule: a name, a keyword
-   your firmware actually prints, and a colour. Every line containing that
-   keyword is now shown in it.
-4. Open *Tools > New filter window* (**Ctrl+F**) and tick that rule to watch
-   only those lines, in their own window, while the full log keeps running.
+   your firmware prints, and a colour.
+4. Open *Tools > New filter window* (**Ctrl+F**) and tick that rule. You are now
+   watching only those lines, while the full log keeps running behind it.
 
 Full walkthrough: **[docs/USAGE.md](docs/USAGE.md)**.
 
-## Features
+## What it does
 
-- **Serial terminal** — live port enumeration; configurable baud rate, data
-  bits, parity, stop bits and flow control. Type to send data back to the
-  device, with a selectable line ending and optional local echo.
-- **Colour rules** — each rule is a *name*, a *keyword* and a *colour*. Any
-  line containing the keyword is shown entirely in that colour. Add, edit,
-  delete, reorder, enable and disable as many as you like.
-- **Filters** — separate windows showing only the lines you select, by colour
-  rule or by text filter, with their output savable to its own file complete
-  with a header recording the filter settings.
-- **Collapsible ribbon** — the controls needed during normal debugging, in
-  grouped sections that fold away via the arrow at the right-hand edge.
-  Optional aids stay out of the way under *Settings*.
-- **Send box with history** — type a command, press Enter, and recall earlier
-  commands with Up/Down; recalled text stays editable.
-- **Optional debugging aids** — millisecond timestamps, RX/TX indicators and
-  ASCII / HEX / HEX + ASCII display modes. All off by default, all
-  display-only.
-- **Optional log saving** — off by default. Turn it on, choose a folder, and
-  UartX writes a plain-text log for each session, holding the raw data the
-  device sent and nothing else.
-- **Persistent configuration** — serial settings, terminal options,
-  log-saving setup, colour rules and filters are saved automatically and
-  reloaded at startup. Named configurations let you keep several setups.
-- **CR/LF normalisation** — LF, CRLF, bare CR and LFCR all render as exactly
-  one line break, including when a terminator is split across read chunks.
-- **Auto-reconnect** — recovers when the device reboots or the USB-serial
-  adapter blips.
+- **Colour rules** — each rule is a *name*, a *keyword* and a *colour*. Any line
+  containing the keyword is shown entirely in that colour. Rules are evaluated in
+  order and the first match wins, so specific rules sit above general ones.
+  Reorder, disable or make them case-sensitive without deleting anything.
+- **Filter windows** — separate windows showing only the lines you select, by
+  colour rule or by text filter. Tick several and a line shows if it matches any
+  of them. Open as many windows as you need; each keeps its own selection and
+  follows the live stream on its own.
+- **Search what you have captured** — look back through the lines a window has
+  already collected. Following pauses so results stay put, **Previous** /
+  **Next** step through matches, and clearing the box resumes live following.
+- **Savable filtered output** — write just the visible lines to their own file,
+  with a header recording exactly which rules, filters and find text produced it.
+  Independent of the session log.
+- **Raw session logging** — off by default. Turn it on and UartX records the
+  bytes the device sent and nothing else. A new file per port open, with
+  placeholders for date, time and port name.
+- **Serial terminal** — live port enumeration; configurable baud rate, data bits,
+  parity, stop bits and flow control. Auto-reconnects when the device reboots or
+  the adapter blips.
+- **Send box with history** — type a command, press Enter, recall earlier
+  commands with Up/Down. Recalled text stays editable, and history persists
+  between runs.
+- **Optional display aids** — millisecond timestamps, RX/TX indicators, and
+  ASCII / HEX / HEX + ASCII modes. All off by default and strictly display-only:
+  switching to hex never changes which lines your rules match, and never changes
+  what lands in the log.
+- **Collapsible ribbon** — the controls you need while debugging, grouped and
+  foldable. Optional aids stay out of the way under *Settings*.
+- **Persistent configuration** — serial settings, terminal options, log setup,
+  colour rules and filters are saved automatically and restored at startup. Named
+  configurations let you keep a setup per board or per project.
+- **CR/LF normalisation** — LF, CRLF, bare CR and LFCR all render as exactly one
+  line break, including when a terminator is split across read chunks.
 
 ## Documentation
 
@@ -101,8 +149,8 @@ cmake -S . -B build/windows -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_P
 cmake --build build/windows
 ```
 
-Or `scripts\build_release.bat` for the executable, installer and portable zip
-in one step. See [docs/BUILDING.md](docs/BUILDING.md) for the detail.
+Or `scripts\build_release.bat` for the executable, installer and portable zip in
+one step. See [docs/BUILDING.md](docs/BUILDING.md) for the detail.
 
 ## Project layout
 
@@ -117,8 +165,8 @@ docs/                 usage and build documentation
 
 The serial port is reached through `src/serialport.h`, a deliberately Qt-free
 platform interface. Everything above it is platform-independent, so supporting
-another operating system means adding one backend `.cpp` and nothing else.
-UartX ships the Windows backend today.
+another operating system means adding one backend `.cpp` and nothing else. UartX
+ships the Windows backend today.
 
 ## Licence
 

@@ -3,6 +3,14 @@
 Thanks for your interest in UartX. This is a small project, so the process is
 light — but a little consistency keeps it maintainable.
 
+UartX is a UART debugging and log analysis tool for embedded and firmware
+developers. Its whole reason to exist is that a developer should never have to
+remove prints from firmware to make a log readable, so the guiding rule is
+**filter the view, never the data**: the display can show whatever helps, but
+the session log stays the raw bytes the device sent, and rule matching always
+works on that same raw text. Changes that blur that line are the ones most
+likely to be sent back.
+
 ## Getting set up
 
 You need Qt 6.2 or newer, a C++17 compiler and CMake 3.19 or newer. Full

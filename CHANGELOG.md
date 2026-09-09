@@ -10,11 +10,12 @@ All notable changes to UartX are recorded here. The format follows
 
 First public release. Windows only.
 
+A UART debugging and log analysis tool for embedded and firmware developers:
+you filter the view, never the data, so a busy log becomes readable without
+removing prints from the firmware.
+
 ### Added
 
-- **Serial terminal** with live port enumeration and configurable baud rate,
-  data bits, parity, stop bits and flow control. Auto-reconnects when the
-  device reboots or the USB-serial adapter blips.
 - **Colour rules** — each a name, a keyword and a colour. Any line containing
   the keyword is shown entirely in that colour. Rules are evaluated in order,
   first match wins, and can be reordered, disabled or made case-sensitive.
@@ -22,7 +23,12 @@ First public release. Windows only.
   defaults a user can delete.
 - **Filter windows** showing only selected lines, chosen by colour rule or by
   text filter, with search over captured lines and savable output carrying a
-  header of the settings that produced it.
+  header of the settings that produced it. Several windows can watch different
+  subsets side by side, each following the live stream independently, while the
+  full stream keeps being recorded.
+- **Serial terminal** with live port enumeration and configurable baud rate,
+  data bits, parity, stop bits and flow control. Auto-reconnects when the
+  device reboots or the USB-serial adapter blips.
 - **Collapsible ribbon** for the controls needed during normal debugging, with
   optional aids kept out of the way under *Settings*.
 - **Send box with persistent history**, a selectable line ending, and optional

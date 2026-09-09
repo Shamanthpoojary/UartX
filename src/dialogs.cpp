@@ -570,10 +570,16 @@ AboutDialog::AboutDialog(QWidget *parent)
         "  td { padding-right: 14px; }"
         "</style>"
 
-        "<p>%1 is a serial terminal for working with any device that communicates over "
-        "UART. It displays incoming data in real time, highlights the lines that matter "
-        "using rules you define, lets you view a filtered subset of the traffic in its "
-        "own window, and can record sessions to disk.</p>"
+        "<p>%1 is a UART debugging and log analysis tool for embedded and firmware "
+        "developers. It turns thousands of lines of firmware output into the "
+        "information you actually need.</p>"
+
+        "<p>When a log is too busy to read, the usual fix is to remove prints from the "
+        "firmware &mdash; which changes the timing and throws away the context that "
+        "would have explained the failure. %1 removes that trade. Leave every print "
+        "where it is, define a rule for what you are hunting, and watch only those "
+        "lines live in a Filter window, while the complete stream keeps being recorded "
+        "to disk exactly as the device sent it. You filter the view, never the data.</p>"
 
         "<p>%1 makes no assumption about how your device formats its messages. Every "
         "color rule and every filter is defined by you, so the same tool suits any "
