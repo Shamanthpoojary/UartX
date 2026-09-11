@@ -79,13 +79,10 @@ Both carry their own Qt runtime.
 
 ### Linux
 
-| Download | Use it when |
-| --- | --- |
-| `UartX-<version>-x86_64.AppImage` | **Any distribution.** Self-contained — bundles Qt, needs no root and installs nothing. |
-| `uartx_<version>_amd64.deb` | Debian, Ubuntu, Mint, Raspberry Pi OS. Proper package with a menu entry and icon; uses your distribution's Qt. |
-| `uartx-<version>-Linux.tar.gz` | You want to unpack it yourself. |
+**Recommended — `UartX-<version>-x86_64.AppImage`**
 
-**AppImage — works everywhere:**
+Works on every distribution. It bundles Qt, needs no root, and installs
+nothing. If you are not sure which to take, take this one.
 
 ```bash
 cd ~/Downloads
@@ -93,7 +90,10 @@ chmod +x UartX-1.1.0-x86_64.AppImage
 ./UartX-1.1.0-x86_64.AppImage
 ```
 
-**`.deb` — Debian and Ubuntu:**
+**Debian, Ubuntu, Mint, Raspberry Pi OS — `uartx_<version>_amd64.deb`**
+
+A proper package: menu entry, icon, and your distribution's Qt rather than a
+bundled copy.
 
 ```bash
 cp uartx_1.1.0_amd64.deb /tmp/
@@ -103,30 +103,41 @@ sudo apt install /tmp/uartx_1.1.0_amd64.deb
 Then launch **UartX** from the applications menu, or run `UartX` (capital U
 and X).
 
-> **Copy the `.deb` to `/tmp` first.** apt drops privileges to the `_apt` user
-> to fetch packages and cannot read inside your home directory, so installing
-> from `~` prints `Download is performed unsandboxed as root...`. It is only a
-> notice, but `/tmp` avoids it.
+> **On Ubuntu 24.04 and newer, use the AppImage instead.** Those releases
+> renamed the Qt packages (`libqt6core6` became `libqt6core6t64`), so a `.deb`
+> built on 22.04 cannot satisfy its dependencies there.
 
-> **Serial permissions — do this once.** Serial devices belong to a group your
-> user is not in, so the first connection fails with "permission denied":
->
-> ```bash
-> sudo usermod -a -G dialout $USER   # Debian, Ubuntu, Raspberry Pi OS
-> sudo usermod -a -G uucp    $USER   # Arch, Fedora, openSUSE
-> ```
->
-> **Log out and back in** for it to take effect. UartX shows this hint in the
-> error dialog when it hits the problem.
+#### Before your first connection
 
-> **The `.deb` needs Qt 6.2 or newer from your distribution.** Ubuntu 24.04 and
-> newer renamed those packages (`libqt6core6` became `libqt6core6t64`), so a
-> `.deb` built on 22.04 cannot satisfy its dependencies there. Use the
-> **AppImage** on those releases, or build from source.
+Serial devices belong to a group your user is not in, so the first attempt
+fails with "permission denied". Once, on any distribution:
 
-> **Older distributions and the AppImage.** Ubuntu 22.04 and earlier need FUSE 2
-> (`sudo apt install libfuse2`). To skip it entirely, run the AppImage with
-> `--appimage-extract-and-run`.
+```bash
+sudo usermod -a -G dialout $USER   # Debian, Ubuntu, Raspberry Pi OS
+sudo usermod -a -G uucp    $USER   # Arch, Fedora, openSUSE
+```
+
+**Log out and back in** for it to take effect. UartX shows this hint in the
+error dialog if you hit it.
+
+#### Other downloads
+
+- `uartx-<version>-Linux.tar.gz` — the installed tree, to unpack wherever you
+  like.
+
+<details>
+<summary>Troubleshooting</summary>
+
+- **`.deb`: "Download is performed unsandboxed as root…"** — harmless, but
+  avoid it by copying the file to `/tmp` before installing, as above. apt drops
+  privileges to the `_apt` user and cannot read inside your home directory.
+- **AppImage will not start on an older distribution** — Ubuntu 22.04 and
+  earlier need FUSE 2: `sudo apt install libfuse2`. To skip FUSE entirely, run
+  it with `--appimage-extract-and-run`.
+- **Wayland desktop** — UartX falls back to X11 on its own, but installing
+  `qt6-wayland` gives the native path and removes a warning on startup.
+
+</details>
 
 ### Verifying a download
 
