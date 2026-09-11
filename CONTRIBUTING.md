@@ -17,12 +17,17 @@ You need Qt 6.2 or newer, a C++17 compiler and CMake 3.19 or newer. Full
 instructions, including the one-shot release script, are in
 [docs/BUILDING.md](docs/BUILDING.md).
 
-```
+```bash
 git clone https://github.com/Shamanthpoojary/UartX.git
 cd UartX
-cmake -S . -B build/windows -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=C:/Qt/6.11.2/mingw_64
-cmake --build build/windows
+scripts/build_release.sh            # Linux
+scripts\build_release.bat           # Windows
 ```
+
+Keep the two build trees separate — `build/linux` and `build/windows`, which is
+what the scripts already do. A CMake build directory records the source path
+and toolchain that made it, so pointing WSL at a tree a Windows build created
+fails to configure.
 
 ## Repository layout
 
@@ -30,8 +35,9 @@ cmake --build build/windows
 | --- | --- |
 | `src/` | all application sources and headers |
 | `resources/` | `uartx.ico`, the Windows resource template, and `icons/` |
-| `scripts/` | release build script and the icon generator |
+| `scripts/` | the two release build scripts and the icon generator |
 | `packaging/windows/` | the Inno Setup template |
+| `packaging/linux/` | desktop entry, AppStream metadata, AppImage script |
 | `docs/` | usage and build documentation |
 | `.github/workflows/` | CI and release automation |
 

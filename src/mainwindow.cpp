@@ -38,6 +38,11 @@
 
 namespace {
 
+/// How long a teardown waits for the reader thread to leave run(). Generous
+/// on purpose: a blocked driver call is what makes the wait matter, and the
+/// caller copes with the timeout rather than destroying a live thread.
+constexpr int WORKER_STOP_TIMEOUT_MS = 5000;
+
 QLabel *fieldLabel(const QString &text, QWidget *parent)
 {
     auto *l = new QLabel(text, parent);
@@ -120,12 +125,7 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
-    if (m_worker) {
-        m_worker->stop();
-        m_worker->wait(2000);
-        delete m_worker;
-        m_worker = nullptr;
-    }
+    releaseWorker();
     closeLog();
 }
 
@@ -492,13 +492,34 @@ void MainWindow::onOpenLogFolder()
 
 // -------------------------------------------------------------- connection
 
+void MainWindow::releaseWorker()
+{
+    if (!m_worker)
+        return;
+
+    SerialWorker *worker = m_worker;
+    m_worker = nullptr;        // callers test m_worker; nothing may reach it now
+
+    // A worker we have abandoned must not deliver anything else: its queued
+    // events would otherwise arrive after the session was torn down.
+    worker->disconnect(this);
+    worker->stop();
+
+    if (worker->wait(WORKER_STOP_TIMEOUT_MS)) {
+        delete worker;         // run() has returned, so this is safe
+        return;
+    }
+
+    // It is still inside run(). Destroying it now would abort the process, so
+    // hand it to Qt to delete itself once it really finishes. It owns nothing
+    // shared, so outliving this call costs nothing.
+    connect(worker, &QThread::finished, worker, &QObject::deleteLater);
+}
+
 void MainWindow::onConnectClicked()
 {
     if (m_worker) {
-        m_worker->stop();
-        m_worker->wait(2000);
-        m_worker->deleteLater();
-        m_worker = nullptr;
+        releaseWorker();
         m_currentStatus = tr("Not connected");
         m_connectBtn->setText(tr("Connect"));
         closeLog();
@@ -565,12 +586,7 @@ void MainWindow::onSerialStatus(const QString &status)
 void MainWindow::onSerialFatal(const QString &message)
 {
     appendSystemMessage(tr("error: ") + message);
-    if (m_worker) {
-        m_worker->stop();
-        m_worker->wait(2000);   // run() has already returned; never delete a live QThread
-        m_worker->deleteLater();
-        m_worker = nullptr;
-    }
+    releaseWorker();
     m_connectBtn->setText(tr("Connect"));
     closeLog();
     m_currentStatus = tr("Not connected");
@@ -797,6 +813,31 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 
 // -------------------------------------------------------------------- logging
 
+/// The port name, reduced to something that can sit inside a file name.
+///
+/// A Windows port is already safe ("COM5"), but a POSIX one is a path
+/// ("/dev/ttyUSB0"). Substituted verbatim it turns the log file name into a
+/// nested path whose directories do not exist, and the file silently fails to
+/// open -- so the separators have to go before the name is built.
+static QString portFileToken(const QString &port)
+{
+    QString token = serialPortDisplayName(port);   // drops the "/dev/" prefix
+
+    // Whatever is left must be legal in a file name on either platform: a
+    // sub-path such as /dev/serial/by-id/... still carries separators, and the
+    // Windows-reserved characters are excluded so one config file can be
+    // carried between machines.
+    for (QChar &c : token) {
+        if (c == QLatin1Char('/') || c == QLatin1Char('\\') || c == QLatin1Char(':')
+            || c == QLatin1Char('*') || c == QLatin1Char('?') || c == QLatin1Char('"')
+            || c == QLatin1Char('<') || c == QLatin1Char('>') || c == QLatin1Char('|')
+            || c.unicode() < 0x20) {
+            c = QLatin1Char('_');
+        }
+    }
+    return token;
+}
+
 QString MainWindow::expandTemplate(const QString &tmpl, const QString &port)
 {
     const QDateTime now = QDateTime::currentDateTime();
@@ -805,7 +846,7 @@ QString MainWindow::expandTemplate(const QString &tmpl, const QString &port)
     out.replace(QStringLiteral("&M"), now.toString(QStringLiteral("MM")));
     out.replace(QStringLiteral("&D"), now.toString(QStringLiteral("dd")));
     out.replace(QStringLiteral("&T"), now.toString(QStringLiteral("HHmmss")));
-    out.replace(QStringLiteral("&H"), port);
+    out.replace(QStringLiteral("&H"), portFileToken(port));
     if (out.trimmed().isEmpty())
         out = QStringLiteral("uartx.log");
     return out;
@@ -834,6 +875,13 @@ bool MainWindow::openLog(const QString &port)
 
 bool MainWindow::createLogFile()
 {
+    // The folder was checked when the session was armed, but the expanded file
+    // name is only known now. Creating the parent turns any surprise in the
+    // name template into a working log rather than a silent failure.
+    const QString parent = QFileInfo(m_logPath).absolutePath();
+    if (!parent.isEmpty() && !QDir(parent).exists())
+        QDir().mkpath(parent);
+
     auto *file = new QFile(m_logPath);
     const QIODevice::OpenMode mode =
         QIODevice::WriteOnly | (m_state.settings.logAppend ? QIODevice::Append
@@ -1078,12 +1126,7 @@ void MainWindow::dlgAbout()           { (new AboutDialog(this))->show(); }
 
 void MainWindow::closeEvent(QCloseEvent *e)
 {
-    if (m_worker) {
-        m_worker->stop();
-        m_worker->wait(2000);
-        m_worker->deleteLater();
-        m_worker = nullptr;
-    }
+    releaseWorker();
     m_noticeTimer->stop();
     m_pollTimer->stop();
     m_currentStatus = tr("Not connected");

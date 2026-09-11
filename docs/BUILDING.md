@@ -12,24 +12,103 @@ No optional Qt modules are needed: only `Qt::Core`, `Qt::Gui` and
 
 ## Platform support
 
-UartX targets **Windows**. The serial port is reached through a small platform
-layer (`src/serialport.h`) that is deliberately free of Qt, so the
-operating-system differences are confined to a single file:
+UartX runs on **Windows** and **Linux** from a single codebase. The serial port
+is reached through a small platform layer (`src/serialport.h`) that is
+deliberately free of Qt, so the operating-system differences are confined to
+two files:
 
 | File | Platform | Uses |
 | --- | --- | --- |
 | `src/serialport_win.cpp` | Windows | `CreateFile` / `DCB` / `COMMTIMEOUTS`, registry enumeration |
+| `src/serialport_posix.cpp` | Linux, other Unix | `open` / `termios` / `select`, `/sys/class/tty` enumeration |
 
-Everything above that layer — the reader thread, the UI, the configuration —
-is platform-independent. Supporting another operating system means adding one
-more `.cpp` behind the same interface; nothing above it changes. CMake stops
-with an explanatory message if configured on a non-Windows platform.
+CMake picks the right one automatically. Everything above that layer — the
+reader thread, the UI, the configuration — is shared by both, unmodified.
+Neither backend uses Qt, which keeps the platform code testable on its own.
+
+> **Keep the two build directories separate.** A CMake build tree records the
+> source path and toolchain that created it, so pointing WSL at a tree a
+> Windows build made fails with *"does not match the source … used to generate
+> cache"*. The two scripts already use `build/windows` and `build/linux`.
 
 ## Qt Creator
 
 Open `CMakeLists.txt`, pick a Desktop Qt 6 kit, then Build & Run.
 
-## One-shot release build
+## Linux
+
+Install the toolchain and Qt 6 development packages:
+
+```bash
+# Debian / Ubuntu / Raspberry Pi OS / Linux Mint
+sudo apt install build-essential cmake ninja-build qt6-base-dev libgl1-mesa-dev
+
+# Fedora / RHEL
+sudo dnf install gcc-c++ cmake ninja-build qt6-qtbase-devel mesa-libGL-devel
+
+# Arch / Manjaro
+sudo pacman -S base-devel cmake ninja qt6-base
+```
+
+Then build and run:
+
+```bash
+scripts/build_release.sh
+./build/linux/UartX
+```
+
+The script also produces packages:
+
+```bash
+scripts/build_release.sh -p deb        # build/linux/uartx_<ver>_amd64.deb
+scripts/build_release.sh -p rpm        # an .rpm, where rpmbuild is available
+scripts/build_release.sh -p tgz        # a plain tarball
+scripts/build_release.sh -p appimage   # a single self-contained AppImage
+```
+
+It can be run from any directory, and it prints which Qt it picked.
+
+> **Building a `.deb` needs Qt from the distribution.** CPack runs
+> `dpkg-shlibdeps` to work out the dependencies, and that only resolves
+> libraries the package manager knows about. If you built against a Qt
+> installed somewhere else (the official Qt installer, `aqtinstall`, a
+> self-built Qt) it fails with `cannot find library libQt6Core.so.6`. Either
+> build against `qt6-base-dev`, or use `-p appimage` / `-p tgz`, which bundle
+> or ignore the Qt location instead. The script warns when the Qt it found is
+> not the distribution's.
+
+> **The AppImage needs `patchelf`.** `linuxdeploy` uses it to rewrite library
+> paths: `sudo apt install patchelf`. The first run also downloads
+> `linuxdeploy` and its Qt plugin into `build/tools`.
+
+Or drive CMake yourself:
+
+```bash
+cmake -S . -B build/linux -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build/linux --parallel
+sudo cmake --install build/linux        # installs to /usr/local
+```
+
+A system install adds the binary, a desktop entry and the icon theme files, so
+UartX appears in the application menu.
+
+### The Wayland platform plugin
+
+Qt's wayland platform plugin ships in a separate package (`qt6-wayland`) that
+the Qt base install does not pull in. When `WAYLAND_DISPLAY` is set and the
+plugin is missing, Qt aborts with *"Could not find the Qt platform plugin
+wayland"* rather than falling back — which is the default state on WSLg and on
+a fresh Wayland desktop.
+
+`src/main.cpp` handles this by asking Qt for `wayland;xcb`, so a missing plugin
+degrades to X11 instead of refusing to start. The `.deb` also lists
+`qt6-wayland` under `Recommends`, since the native plugin is the better
+experience where it is available. Set `QT_QPA_PLATFORM` yourself to override
+the choice.
+
+## Windows
+
+### One-shot release build
 
 ```
 scripts\build_release.bat
@@ -39,7 +118,7 @@ Produces the executable, the installer and the portable zip in
 `build\windows\`. Edit `QT_DIR` at the top of the script if your Qt lives
 somewhere else. The script can be run from any directory.
 
-## Command line
+### Command line
 
 ```
 cmake -S . -B build/windows -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=C:/Qt/6.11.2/mingw_64
@@ -47,6 +126,8 @@ cmake --build build/windows
 ```
 
 ## Packaging targets
+
+### Windows
 
 Three targets produce distributable artifacts. All of them run `windeployqt`,
 so the result carries its own Qt runtime and needs no Qt installation on the
@@ -57,6 +138,17 @@ target machine.
 | `cmake --build build/windows --target installer` | `build/windows/installer/UartX-<ver>-setup.exe` |
 | `cmake --build build/windows --target portable` | `build/windows/installer/UartX-<ver>-portable-win64.zip` |
 | `cmake --install build/windows --prefix <dir>` | a self-contained folder at `<dir>` |
+
+### Linux
+
+| Command | Result |
+| --- | --- |
+| `cd build/linux && cpack -G DEB` | `uartx_<ver>_amd64.deb` |
+| `cd build/linux && cpack -G RPM` | `uartx-<ver>.x86_64.rpm` |
+| `cd build/linux && cpack -G TGZ` | `uartx-<ver>-Linux.tar.gz` |
+| `packaging/linux/make-appimage.sh build/linux` | `UartX-<ver>-x86_64.AppImage` |
+
+The `.deb` and `.rpm` depend on the distribution's Qt; the AppImage bundles it.
 
 ### The installer
 
@@ -85,7 +177,7 @@ existing installation in place rather than leaving two entries behind.
 Silent install, for scripted rollout:
 
 ```
-UartX-1.0.0-setup.exe /VERYSILENT /SUPPRESSMSGBOXES
+UartX-1.1.0-setup.exe /VERYSILENT /SUPPRESSMSGBOXES
 ```
 
 ## Regenerating the icons
@@ -112,14 +204,27 @@ its own.
 3. Commit, then push a tag:
 
    ```
-   git tag v1.0.1
-   git push origin v1.0.1
+   git tag v1.1.1
+   git push origin v1.1.1
    ```
 
-The **Release** workflow builds the installer and the portable zip, writes a
-`SHA256SUMS.txt`, and attaches all three to a GitHub Release. It is set to
-publish nothing rather than an empty release if a build step produces no
-artifacts.
+The **Release** workflow then builds both platforms in parallel and attaches
+everything to a GitHub Release:
+
+| Job | Artifacts |
+| --- | --- |
+| Windows | `UartX-<ver>-setup.exe`, `UartX-<ver>-portable-win64.zip`, `SHA256SUMS-windows.txt` |
+| Linux (Ubuntu 22.04) | `uartx_<ver>_amd64.deb`, `uartx-<ver>-Linux.tar.gz`, `UartX-<ver>-x86_64.AppImage`, `SHA256SUMS-linux.txt` |
+
+Each job is set to publish nothing rather than an empty release if its build
+produced no artifacts. The AppImage step is marked `continue-on-error` on
+purpose: it downloads tools at build time, so it is the step most likely to
+break on something outside this repository, and it must never take a good
+`.deb` down with it.
+
+The Linux job builds against Ubuntu 22.04's Qt so the `.deb` installs on the
+current LTS. Distributions that renamed the Qt packages (Ubuntu 24.04 and
+newer) are served by the AppImage.
 
 Release binaries are **not** committed to this repository — they live only as
 Release assets, so cloning stays cheap.
@@ -145,7 +250,7 @@ Sign both the executable and the setup program, in that order:
 
 ```
 signtool sign /f cert.pfx /p <password> /tr http://timestamp.digicert.com /td sha256 /fd sha256 UartX.exe
-signtool sign /f cert.pfx /p <password> /tr http://timestamp.digicert.com /td sha256 /fd sha256 UartX-1.0.0-setup.exe
+signtool sign /f cert.pfx /p <password> /tr http://timestamp.digicert.com /td sha256 /fd sha256 UartX-1.1.0-setup.exe
 ```
 
 `signtool` ships with the Windows SDK.
@@ -166,6 +271,7 @@ signtool sign /f cert.pfx /p <password> /tr http://timestamp.digicert.com /td sh
 | `src/dialogs.{h,cpp}` | Serial port / Log saving / Terminal / Configurations / About |
 | `src/serialport.h` | the Qt-free platform interface |
 | `src/serialport_win.cpp` | Win32 backend and port enumeration |
+| `src/serialport_posix.cpp` | POSIX backend: termios, `select`, `/sys/class/tty` enumeration |
 | `src/serialworker.{h,cpp}` | the serial reader-writer thread |
 | `src/lineassembler.{h,cpp}` | CR/LF normalisation and log sanitising |
 | `src/lineformat.{h,cpp}` | display formatting: timestamps, direction, hex modes |
@@ -175,5 +281,9 @@ signtool sign /f cert.pfx /p <password> /tr http://timestamp.digicert.com /td sh
 | `resources/app.rc.in` | executable icon and version metadata (configured by CMake) |
 | `resources/icons/` | icon sizes, wordmark and UI glyphs, compiled into the binary |
 | `packaging/windows/installer.iss.in` | Inno Setup script (configured by CMake) |
-| `scripts/build_release.bat` | one-shot release build |
+| `packaging/linux/uartx.desktop.in` | desktop entry (configured by CMake) |
+| `packaging/linux/metainfo.xml.in` | AppStream metadata (configured by CMake) |
+| `packaging/linux/make-appimage.sh` | builds a self-contained AppImage |
+| `scripts/build_release.bat` | one-shot Windows release build |
+| `scripts/build_release.sh` | one-shot Linux release build and packaging |
 | `scripts/make_icon.py` | regenerates the brand assets (needs Pillow) |

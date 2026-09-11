@@ -26,7 +26,13 @@ installer.iss
 *.zip
 *.tar.gz
 *.msi
-SHA256SUMS.txt
+*.deb
+*.rpm
+*.AppImage
+SHA256SUMS*.txt
+
+# linuxdeploy's staging tree and the tools it downloads
+AppDir/
 
 # --- Editors and IDEs -------------------------------------------------------
 .qtcreator/

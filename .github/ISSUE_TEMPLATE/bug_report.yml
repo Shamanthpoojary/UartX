@@ -13,15 +13,15 @@ body:
     attributes:
       label: UartX version
       description: Shown in Help > About UartX.
-      placeholder: "1.0.0"
+      placeholder: "1.1.0"
     validations:
       required: true
 
   - type: input
-    id: windows
+    id: os
     attributes:
-      label: Windows version
-      placeholder: "Windows 11 24H2"
+      label: Operating system
+      placeholder: "Windows 11 24H2, or Ubuntu 24.04"
     validations:
       required: true
 

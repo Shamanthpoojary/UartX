@@ -14,10 +14,7 @@
 ///
 /// Implementations:
 ///   serialport_win.cpp    Win32  (CreateFile / DCB / COMMTIMEOUTS)
-///
-/// Only the Win32 backend ships in this repository. Supporting another
-/// platform means adding one more .cpp behind this same interface; nothing
-/// above it needs to change.
+///   serialport_posix.cpp  POSIX  (open / termios), used on Linux
 namespace serial {
 
 struct Config

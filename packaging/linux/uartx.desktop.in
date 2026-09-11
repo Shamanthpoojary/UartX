@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=@APP_PRODUCT@
+GenericName=UART Log Analyser
+Comment=@APP_DESCRIPTION@
+Exec=UartX
+Icon=@APP_DESKTOP_ID@
+Terminal=false
+Categories=Development;Electronics;Utility;
+Keywords=UART;Serial;RS232;Terminal;Console;Embedded;Firmware;Log;
+StartupNotify=true
+StartupWMClass=UartX

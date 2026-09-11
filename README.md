@@ -5,7 +5,7 @@
 [![Release](https://img.shields.io/github/v/release/Shamanthpoojary/UartX?sort=semver)](https://github.com/Shamanthpoojary/UartX/releases/latest)
 [![CI](https://github.com/Shamanthpoojary/UartX/actions/workflows/ci.yml/badge.svg)](https://github.com/Shamanthpoojary/UartX/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Platform: Windows](https://img.shields.io/badge/platform-Windows-lightgrey)
+![Platform: Windows and Linux](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey)
 
 UartX is a UART-based debugging and analysis tool built specifically for
 embedded and firmware developers.
@@ -53,21 +53,18 @@ it. What lands on disk is what came off the wire.
 
 ## Install
 
-Download the latest build from the
-**[Releases page](https://github.com/Shamanthpoojary/UartX/releases/latest)**:
+Everything comes from the
+**[Releases page](https://github.com/Shamanthpoojary/UartX/releases/latest)**.
+Pick the file for your system — nothing else needs installing first.
+
+### Windows
 
 | Download | Use it when |
 | --- | --- |
 | `UartX-<version>-setup.exe` | Normal install. Start Menu entry, optional desktop shortcut, proper uninstaller. No administrator rights required. |
 | `UartX-<version>-portable-win64.zip` | You would rather not install anything. Unzip and run `UartX.exe`. |
 
-Both carry their own Qt runtime, so nothing else needs installing.
-
-Every release also ships `SHA256SUMS.txt` if you want to verify the download:
-
-```powershell
-Get-FileHash UartX-1.0.0-setup.exe -Algorithm SHA256
-```
+Both carry their own Qt runtime.
 
 > **SmartScreen warning.** The installer is not code-signed, so Windows shows
 > "Windows protected your PC" the first time it runs on a machine.
@@ -79,6 +76,70 @@ Get-FileHash UartX-1.0.0-setup.exe -Algorithm SHA256
 > rather than UartX. Check **Device Manager → Ports (COM & LPT)**. CP210x and
 > FTDI adapters usually install themselves over Windows Update; CH340/CH341
 > clones normally need their driver installed by hand.
+
+### Linux
+
+| Download | Use it when |
+| --- | --- |
+| `UartX-<version>-x86_64.AppImage` | **Any distribution.** Self-contained — bundles Qt, needs no root and installs nothing. |
+| `uartx_<version>_amd64.deb` | Debian, Ubuntu, Mint, Raspberry Pi OS. Proper package with a menu entry and icon; uses your distribution's Qt. |
+| `uartx-<version>-Linux.tar.gz` | You want to unpack it yourself. |
+
+**AppImage — works everywhere:**
+
+```bash
+cd ~/Downloads
+chmod +x UartX-1.1.0-x86_64.AppImage
+./UartX-1.1.0-x86_64.AppImage
+```
+
+**`.deb` — Debian and Ubuntu:**
+
+```bash
+cp uartx_1.1.0_amd64.deb /tmp/
+sudo apt install /tmp/uartx_1.1.0_amd64.deb
+```
+
+Then launch **UartX** from the applications menu, or run `UartX` (capital U
+and X).
+
+> **Copy the `.deb` to `/tmp` first.** apt drops privileges to the `_apt` user
+> to fetch packages and cannot read inside your home directory, so installing
+> from `~` prints `Download is performed unsandboxed as root...`. It is only a
+> notice, but `/tmp` avoids it.
+
+> **Serial permissions — do this once.** Serial devices belong to a group your
+> user is not in, so the first connection fails with "permission denied":
+>
+> ```bash
+> sudo usermod -a -G dialout $USER   # Debian, Ubuntu, Raspberry Pi OS
+> sudo usermod -a -G uucp    $USER   # Arch, Fedora, openSUSE
+> ```
+>
+> **Log out and back in** for it to take effect. UartX shows this hint in the
+> error dialog when it hits the problem.
+
+> **The `.deb` needs Qt 6.2 or newer from your distribution.** Ubuntu 24.04 and
+> newer renamed those packages (`libqt6core6` became `libqt6core6t64`), so a
+> `.deb` built on 22.04 cannot satisfy its dependencies there. Use the
+> **AppImage** on those releases, or build from source.
+
+> **Older distributions and the AppImage.** Ubuntu 22.04 and earlier need FUSE 2
+> (`sudo apt install libfuse2`). To skip it entirely, run the AppImage with
+> `--appimage-extract-and-run`.
+
+### Verifying a download
+
+Each platform's assets ship with a checksum file — `SHA256SUMS-windows.txt` or
+`SHA256SUMS-linux.txt`:
+
+```bash
+sha256sum -c SHA256SUMS-linux.txt        # Linux
+```
+
+```powershell
+Get-FileHash UartX-1.1.0-setup.exe -Algorithm SHA256    # Windows
+```
 
 ## Quick start
 
@@ -142,15 +203,27 @@ Full walkthrough: **[docs/USAGE.md](docs/USAGE.md)**.
 
 Needs Qt 6.2 or newer, a C++17 compiler and CMake 3.19 or newer.
 
+**Linux:**
+
+```bash
+sudo apt install build-essential cmake ninja-build qt6-base-dev libgl1-mesa-dev
+git clone https://github.com/Shamanthpoojary/UartX.git
+cd UartX
+scripts/build_release.sh            # or -p deb / -p tgz / -p appimage
+./build/linux/UartX
+```
+
+**Windows:**
+
 ```
 git clone https://github.com/Shamanthpoojary/UartX.git
 cd UartX
-cmake -S . -B build/windows -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=C:/Qt/6.11.2/mingw_64
-cmake --build build/windows
+scripts\build_release.bat
 ```
 
-Or `scripts\build_release.bat` for the executable, installer and portable zip in
-one step. See [docs/BUILDING.md](docs/BUILDING.md) for the detail.
+Either script produces the packages for its platform in one step. See
+[docs/BUILDING.md](docs/BUILDING.md) for the detail, including the other
+distributions' package names.
 
 ## Project layout
 
@@ -164,9 +237,10 @@ docs/                 usage and build documentation
 ```
 
 The serial port is reached through `src/serialport.h`, a deliberately Qt-free
-platform interface. Everything above it is platform-independent, so supporting
-another operating system means adding one backend `.cpp` and nothing else. UartX
-ships the Windows backend today.
+platform interface, with one backend per platform —
+`src/serialport_win.cpp` (Win32) and `src/serialport_posix.cpp` (termios).
+Everything above that line is shared between both, unmodified, so supporting
+another operating system means adding one more backend `.cpp` and nothing else.
 
 ## Licence
 

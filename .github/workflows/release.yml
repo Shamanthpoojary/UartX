@@ -1,8 +1,8 @@
 name: Release
 
-# Builds the Windows installer and the portable zip and attaches them to a
-# GitHub Release. Push a tag such as v1.0.0 to publish, or run the workflow by
-# hand to get the artifacts without publishing.
+# Builds the Windows and Linux packages and attaches them to a GitHub Release.
+# Push a tag such as v1.1.0 to publish, or run the workflow by hand to get the
+# artifacts without publishing.
 on:
   push:
     tags:
@@ -13,6 +13,65 @@ permissions:
   contents: write
 
 jobs:
+  linux:
+    name: Linux (Ubuntu 22.04)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      # Built against the distribution's Qt on purpose: dpkg-shlibdeps can only
+      # resolve libraries the package manager knows about, so a .deb built
+      # against a hand-installed Qt is not installable anywhere else.
+      # patchelf is what linuxdeploy uses to rewrite library paths; without it
+      # the AppImage step fails.
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build \
+            qt6-base-dev qt6-base-dev-tools libgl1-mesa-dev \
+            patchelf file desktop-file-utils fuse
+
+      - name: Configure
+        run: cmake -S . -B build/linux -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build/linux --parallel
+
+      - name: Package (deb + tar.gz)
+        working-directory: build/linux
+        run: |
+          cpack -G DEB
+          cpack -G TGZ
+
+      # An AppImage needs tools downloaded at build time, so it is the step
+      # most likely to break on something outside this repository. It must
+      # never take a good .deb down with it.
+      - name: Package (AppImage)
+        continue-on-error: true
+        run: ./packaging/linux/make-appimage.sh build/linux
+
+      - name: Collect artifacts and checksums
+        run: |
+          mkdir -p dist
+          cp build/linux/*.deb build/linux/*.tar.gz dist/ 2>/dev/null || true
+          cp build/linux/UartX*.AppImage dist/ 2>/dev/null || true
+          ( cd dist && sha256sum * > SHA256SUMS-linux.txt )
+          ls -la dist
+          cat dist/SHA256SUMS-linux.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: uartx-linux
+          path: dist/*
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          fail_on_unmatched_files: true
+
   windows:
     name: Windows
     runs-on: windows-latest
@@ -50,13 +109,13 @@ jobs:
           Copy-Item build/installer/* dist/
           # Written byte by byte rather than with Set-Content: PowerShell's
           # cmdlets add a BOM and CRLF line endings, and either one makes
-          # `sha256sum -c SHA256SUMS.txt` fail on Linux, macOS and Git Bash.
+          # `sha256sum -c` fail on Linux, macOS and Git Bash.
           $lines = Get-FileHash dist/* -Algorithm SHA256 |
               ForEach-Object { "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)" }
           [System.IO.File]::WriteAllText(
-              "$PWD/dist/SHA256SUMS.txt", ($lines -join "`n") + "`n",
+              "$PWD/dist/SHA256SUMS-windows.txt", ($lines -join "`n") + "`n",
               (New-Object System.Text.UTF8Encoding $false))
-          Get-Content dist/SHA256SUMS.txt
+          Get-Content dist/SHA256SUMS-windows.txt
           Get-ChildItem dist | Format-Table Name, Length
 
       - uses: actions/upload-artifact@v4

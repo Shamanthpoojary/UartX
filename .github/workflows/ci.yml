@@ -1,7 +1,7 @@
 name: CI
 
-# Proves that main and every pull request still build. Packaging is not run
-# here -- that is the Release workflow's job.
+# Proves that main and every pull request still build on both platforms.
+# Packaging is not run here -- that is the Release workflow's job.
 on:
   push:
     branches: [ main ]
@@ -14,7 +14,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  linux:
+    name: Build (Linux)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build \
+            qt6-base-dev qt6-base-dev-tools libgl1-mesa-dev
+
+      - name: Configure
+        run: cmake -S . -B build/linux -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build/linux --parallel
+
+      - name: Check the binary was produced
+        run: |
+          test -x build/linux/UartX || { echo "build/linux/UartX was not built"; exit 1; }
+          ls -la build/linux/UartX
+          file build/linux/UartX
+
+  windows:
     name: Build (Windows)
     runs-on: windows-latest
     steps:

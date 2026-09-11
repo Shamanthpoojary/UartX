@@ -19,8 +19,21 @@ Set the **Port** and **Baud** rate in the Connection group of the ribbon. Use
 bits and flow control open *Settings > Serial port*. Settings take effect the
 next time the port is opened.
 
-The port list is populated from the machine — `COM1`, `COM3`, and so on. You
-can also type a port the scan did not find.
+The port list is populated from the machine: `COM1`, `COM3`, … on Windows;
+`/dev/ttyUSB0`, `/dev/ttyACM0`, `/dev/ttyAMA0`, … on Linux. You can also type a
+port the scan did not find.
+
+> **Linux permissions — do this once.** Serial devices belong to a group your
+> user is not in, so the first connection attempt fails with "permission
+> denied":
+>
+> ```bash
+> sudo usermod -a -G dialout $USER   # Debian, Ubuntu, Raspberry Pi OS
+> sudo usermod -a -G uucp    $USER   # Arch, Fedora, openSUSE
+> ```
+>
+> Log out and back in for it to take effect. UartX shows this hint in the error
+> dialog when it hits the problem.
 
 ## 2. Connect
 
@@ -95,7 +108,7 @@ independent of the session log. The file opens with a header recording exactly
 which settings produced it:
 
 ```
-===== UartX 1.0.0 - filtered output =====
+===== UartX 1.1.0 - filtered output =====
 Saved         : 2026-08-21 12:05:43
 Source        : COM5 @ 115200 baud
 Color rules   : Fatal
@@ -160,12 +173,14 @@ UartX starts, whether or not they belong to a named configuration.
 
 Everything the user can change is stored in one file and reloaded at startup:
 
-```
-%LOCALAPPDATA%\UartX\config.json
-```
+| Platform | Location |
+| --- | --- |
+| Windows | `%LOCALAPPDATA%\UartX\config.json` |
+| Linux | `~/.config/UartX/config.json` |
 
-Logs default to `Documents\UartX_Logs` under your home directory, and can be
-pointed anywhere.
+Logs default to `Documents/UartX_Logs` under your home directory on both
+platforms, and can be pointed anywhere. The folder is created the first time a
+session needs it.
 
 It holds the serial settings, terminal options, log-saving state and path,
 every colour rule (name, keyword, colour, enabled state, match-case flag),

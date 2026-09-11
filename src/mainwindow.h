@@ -60,6 +60,11 @@ public:
     void applyColorRules(const ColorRuleSet &rules);
     void applyTextFilters(const TextFilterSet &filters);
 
+    /// Stops the reader thread and gives up ownership of it. The single place
+    /// the worker is torn down, because destroying a QThread that is still
+    /// inside run() aborts the process.
+    void releaseWorker();
+
     // --- session log lifecycle ---
     // Arms logging for a session; the file itself is not created until the
     // first byte arrives, so an idle session leaves nothing behind.
