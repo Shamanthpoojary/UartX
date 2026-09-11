@@ -107,7 +107,6 @@ Both carry their own Qt runtime.
 
 **Recommended — `UartX-<version>-x86_64.AppImage`**
 
-Works on every distribution. It bundles Qt, needs no root, and installs
 **AppImage — portable Linux package:**
 
 ```bash
