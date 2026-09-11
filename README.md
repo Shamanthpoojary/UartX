@@ -1,22 +1,16 @@
-<p align="center">
-  <!-- The wordmark is a single-ink mask, so it ships in both inks and follows
-       the reader's theme -- the same thing the About box does at run time. -->
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/Images/wordmark-dark.png">
-    <img src="docs/Images/wordmark-light.png" alt="UartX" width="240">
-  </picture>
-</p>
+<!-- The wordmark is a single-ink mask, so it ships in both inks and follows the
+     reader's theme -- the same thing the About box does at run time. -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/Images/wordmark-dark.png">
+  <img src="docs/Images/wordmark-light.png" alt="UartX" width="170">
+</picture>
 
-<p align="center">
-  <strong>Turn thousands of lines of firmware output into the information you actually need.</strong>
-</p>
+**Turn thousands of lines of firmware output into the information you actually need.**
 
-<p align="center">
-  <a href="https://github.com/Shamanthpoojary/UartX/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/Shamanthpoojary/UartX?sort=semver"></a>
-  <a href="https://github.com/Shamanthpoojary/UartX/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Shamanthpoojary/UartX/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
-  <img alt="Platform: Windows and Linux" src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey">
-</p>
+[![Release](https://img.shields.io/github/v/release/Shamanthpoojary/UartX?sort=semver)](https://github.com/Shamanthpoojary/UartX/releases/latest)
+[![CI](https://github.com/Shamanthpoojary/UartX/actions/workflows/ci.yml/badge.svg)](https://github.com/Shamanthpoojary/UartX/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Platform: Windows and Linux](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey)
 
 UartX is a UART-based debugging and analysis tool built specifically for
 embedded and firmware developers.
