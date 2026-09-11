@@ -284,6 +284,16 @@ void FilterWindow::refreshSources(const ColorRuleSet &rules, const TextFilterSet
     if (!m_filterBoxes.isEmpty())
         m_selectedFilters = checkedNames(m_filterBoxes);
 
+    // A new window starts with every colour rule ticked, so what the
+    // checkboxes say and what the window shows agree from the first line.
+    // Text filters are deliberately left alone: the library is a set of
+    // one-off searches a user opts into, not categories that describe the log.
+    if (!m_sourcesPopulated) {
+        for (const ColorRule &r : rules.rules)
+            m_selectedRules.insert(r.name);
+        m_sourcesPopulated = true;
+    }
+
     clearCheckList(m_ruleLayout, &m_ruleBoxes, &m_ruleHint);
     clearCheckList(m_filterLayout, &m_filterBoxes, &m_filterHint);
 
@@ -351,8 +361,18 @@ bool FilterWindow::matches(const LineRecord &record) const
 {
     const QSet<QString> rules   = checkedNames(m_ruleBoxes);
     const QSet<QString> filters = checkedNames(m_filterBoxes);
+
+    // Nothing to choose from at all -- no colour rules and no text filters
+    // exist yet -- so the window cannot be a subset of anything and mirrors
+    // the terminal rather than sitting empty behind two "none defined" hints.
+    if (m_ruleBoxes.isEmpty() && m_filterBoxes.isEmpty())
+        return true;
+
+    // Sources exist and the user has ticked none of them. Show nothing: the
+    // checkboxes are the statement of what this window is for, and contents
+    // that disagree with them are what made an untouched window look broken.
     if (rules.isEmpty() && filters.isEmpty())
-        return true;   // nothing selected means "no filtering", not "show nothing"
+        return false;
 
     if (!record.colorRule.isEmpty() && rules.contains(record.colorRule))
         return true;

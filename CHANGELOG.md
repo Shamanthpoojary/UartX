@@ -6,6 +6,21 @@ All notable changes to UartX are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **A new Filter window showed every line while all of its sources sat
+  unticked.** Nothing ticked was treated as "no filtering" rather than "nothing
+  chosen", so the checkboxes and the contents disagreed from the moment the
+  window opened. A window now starts with every colour rule already ticked, and
+  unticking everything shows nothing — what is ticked is what you see. A user
+  with no colour rules and no text filters at all still gets the full stream,
+  since there is nothing to choose from.
+
+### Added
+
+- Screenshots in the README, and the wordmark at the top of it in both inks so
+  it follows the reader's light or dark theme.
+
 ## [1.1.0] - 2026-09-11
 
 Linux support, and the three bugs found while testing it.

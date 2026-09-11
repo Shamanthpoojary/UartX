@@ -125,6 +125,12 @@ private:
     /// silently change what an open window is showing.
     QSet<QString> m_selectedRules;
     QSet<QString> m_selectedFilters;
+
+    /// False until the source lists have been built once. A new window opens
+    /// with every colour rule already ticked; a later rebuild -- after a rule
+    /// is edited -- must keep whatever the user had chosen instead.
+    bool m_sourcesPopulated = false;
+
     int     m_shown = 0;
     QString m_baseCount;
 

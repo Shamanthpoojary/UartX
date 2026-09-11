@@ -90,9 +90,16 @@ traffic, chosen two ways:
   filter of `/6/` shows only the lines containing `/6/`. **Add** creates one;
   it joins your filter library and is available in every Filter window.
 
+A new window opens with **every colour rule already ticked**, so it starts by
+showing every categorised line and you narrow from there by unticking.
+
 Ticking several sources combines them: a line is shown if it matches **any**
-ticked rule or filter. With nothing ticked every line is shown. **Quick find**
-narrows whatever gets through, without saving a filter.
+ticked rule or filter. Untick everything and the window shows nothing — what
+is ticked is exactly what you see. (The one exception: if you have no colour
+rules and no text filters at all, there is nothing to choose from, so the
+window mirrors the terminal instead of sitting empty.)
+
+**Quick find** narrows whatever gets through, without saving a filter.
 
 Open several Filter windows to watch different subsets side by side; each
 keeps its own selection. Filters apply to incoming lines only: a window starts

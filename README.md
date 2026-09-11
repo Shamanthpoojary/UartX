@@ -1,11 +1,22 @@
-# UartX
+<p align="center">
+  <!-- The wordmark is a single-ink mask, so it ships in both inks and follows
+       the reader's theme -- the same thing the About box does at run time. -->
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/Images/wordmark-dark.png">
+    <img src="docs/Images/wordmark-light.png" alt="UartX" width="240">
+  </picture>
+</p>
 
-**Turn thousands of lines of firmware output into the information you actually need.**
+<p align="center">
+  <strong>Turn thousands of lines of firmware output into the information you actually need.</strong>
+</p>
 
-[![Release](https://img.shields.io/github/v/release/Shamanthpoojary/UartX?sort=semver)](https://github.com/Shamanthpoojary/UartX/releases/latest)
-[![CI](https://github.com/Shamanthpoojary/UartX/actions/workflows/ci.yml/badge.svg)](https://github.com/Shamanthpoojary/UartX/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Platform: Windows and Linux](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey)
+<p align="center">
+  <a href="https://github.com/Shamanthpoojary/UartX/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/Shamanthpoojary/UartX?sort=semver"></a>
+  <a href="https://github.com/Shamanthpoojary/UartX/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Shamanthpoojary/UartX/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
+  <img alt="Platform: Windows and Linux" src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey">
+</p>
 
 UartX is a UART-based debugging and analysis tool built specifically for
 embedded and firmware developers.
@@ -34,6 +45,11 @@ You filter the view, never the data. When you finally catch the failure, the
 full log is still sitting there with all the context you did not think you would
 need.
 
+![The UartX main window: live UART traffic with user-defined colour rules applied](docs/Images/Main_window.png)
+
+*The full stream, coloured by your own rules. Nothing is hidden here — this is
+everything the device sent.*
+
 ## How it works
 
 **1. Say what matters.** A colour rule is a name, a keyword your firmware
@@ -41,10 +57,20 @@ actually prints, and a colour. `|E|` in red. `TASK6` in amber. Nothing is built
 in — UartX assumes nothing about your log format, so the rules are whatever your
 firmware happens to emit.
 
+![The Color rules window: each rule is a name, a keyword and a colour](docs/Images/Color_window.png)
+
+*Rules are yours. Reorder them — first match wins — switch one off without
+deleting it, or make a keyword case-sensitive.*
+
 **2. Open a window on it.** Tick that rule in a Filter window and you see only
 the lines it matches. Open several windows to watch different subsets side by
 side — one for faults, one for a single task, one for a state machine — each
 following the live stream independently.
+
+![A Filter window showing only the lines matching the ticked colour rules](docs/Images/Filter_window.png)
+
+*The same session, narrowed to what you are hunting. Search back through what a
+window has already collected, and save just those lines to their own file.*
 
 **3. The full log keeps recording.** The session log holds the raw bytes the
 device sent and nothing else: no timestamps, no direction markers, no hex

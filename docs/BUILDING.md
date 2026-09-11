@@ -195,6 +195,11 @@ The wordmark is tinted at run time to whichever of black or white stays
 readable against the surface it is drawn on, so it must have no background of
 its own.
 
+`docs/Images/wordmark-light.png` and `wordmark-dark.png` are the README's copies
+of that same mask, re-inked ahead of time because a page cannot tint an image:
+the alpha channel carries the shape, so both are produced by replacing the
+colour and keeping the alpha. Regenerate them if the wordmark ever changes.
+
 ## Cutting a release
 
 1. Bump the version in the `project()` call in `CMakeLists.txt`. It flows into
