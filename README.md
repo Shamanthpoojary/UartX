@@ -85,7 +85,7 @@ Both carry their own Qt runtime.
 | `uartx_<version>_amd64.deb` | Debian, Ubuntu, Mint, Raspberry Pi OS. Proper package with a menu entry and icon; uses your distribution's Qt. |
 | `uartx-<version>-Linux.tar.gz` | You want to unpack it yourself. |
 
-**AppImage — works everywhere:**
+**AppImage — portable Linux package:**
 
 ```bash
 cd ~/Downloads
