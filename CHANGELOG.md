@@ -40,6 +40,14 @@ Linux support, and the three bugs found while testing it.
   backend wrote to a blocking descriptor, so a device asserting flow control —
   or unplugged mid-write — parked the thread indefinitely and made the teardown
   above time out. Writes now wait for writability with a deadline.
+- **Dialogs were unreadable: light-grey text on a light background.** The
+  stylesheet gave `QMainWindow` a dark background but never named `QDialog`, so
+  every dialog kept the platform's own light window colour while the `QLabel`
+  rule painted light-grey text onto it — measured at a 1.24:1 contrast ratio.
+  Dialogs and the widgets they are built from are now styled explicitly, and a
+  dark `QPalette` is applied so anything the stylesheet does not name still
+  gets the right colours. The same dialog now measures 12.93:1. This affected
+  both platforms; it was simply more obvious against a Linux desktop theme.
 - **UartX would not start on a Wayland session** without `qt6-wayland`
   installed, which is the default state on WSLg and on a fresh Wayland desktop:
   Qt aborted with "Could not find the Qt platform plugin wayland" instead of

@@ -30,8 +30,9 @@ int main(int argc, char *argv[])
     QApplication::setWindowIcon(Theme::appIcon());
 
     // Application-wide, not per-window: the Filter windows are parentless
-    // top-level widgets and would inherit nothing from the main window.
-    qApp->setStyleSheet(Theme::styleSheet());
+    // top-level widgets, and every dialog is short-lived, so neither would
+    // inherit anything from the main window.
+    Theme::apply(app);
 
     MainWindow window;
     window.show();
