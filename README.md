@@ -272,8 +272,19 @@ platform interface, with one backend per platform —
 Everything above that line is shared between both, unmodified, so supporting
 another operating system means adding one more backend `.cpp` and nothing else.
 
+## Support and contact
+
+Found a bug, or hit a device that doesn't behave? Open an
+[issue](https://github.com/Shamanthpoojary/UartX/issues) — that's the best place
+for anything reproducible, since the discussion stays with the code.
+
+For anything else — questions, feature ideas, or if you'd rather not open an
+issue — use the contact form:
+
+**[Send a message](https://portfolio-woad-nine-40.vercel.app/?subject=UartX#contact)**
+
+It reaches me directly, and the subject arrives tagged as UartX.
+
 ## Licence
 
 [MIT](LICENSE) · Copyright (c) 2026 Shamanth
-
-Support: **shamanth25402@gmail.com**
