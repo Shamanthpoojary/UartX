@@ -281,7 +281,7 @@ for anything reproducible, since the discussion stays with the code.
 For anything else — questions, feature ideas, or if you'd rather not open an
 issue — use the contact form:
 
-**[Send a message](https://portfolio-woad-nine-40.vercel.app/?subject=UartX#contact)**
+**[Send a message](https://portfolio-woad-nine-40.vercel.app/?subject=UartX#send-message)**
 
 It reaches me directly, and the subject arrives tagged as UartX.
 
