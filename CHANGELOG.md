@@ -6,7 +6,19 @@ All notable changes to UartX are recorded here. The format follows
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-09-19
+
 ### Fixed
+
+- **The Windows packages would not start on a machine without MinGW
+  installed**, failing with a "DLL not found" box naming
+  `libgcc_s_seh-1.dll`. The executable imports the MinGW runtime directly, and
+  `windeployqt` only copies it when it can find the toolchain on `PATH` —
+  which is true of `scripts/build_release.bat` and was not true on CI. So every
+  local build worked and every published build was broken. CMake now installs
+  the runtime explicitly, resolved from the compiler itself rather than from
+  `PATH`, and the release workflow fails if anything the staged binaries import
+  is neither shipped nor a Windows system DLL.
 
 - **A new Filter window showed every line while all of its sources sat
   unticked.** Nothing ticked was treated as "no filtering" rather than "nothing
@@ -20,6 +32,9 @@ All notable changes to UartX are recorded here. The format follows
 
 - Screenshots in the README, and the wordmark at the top of it in both inks so
   it follows the reader's light or dark theme.
+- A "Which file do I need?" table in the README, mapping each release asset
+  to the platform it is for, since the Releases page keeps its Assets list
+  collapsed and offers the source archives alongside the real downloads.
 
 ## [1.1.0] - 2026-09-11
 
@@ -109,6 +124,7 @@ removing prints from the firmware.
   the target machine needs no Qt installation. The installer runs without
   administrator rights and leaves `config.json` alone on uninstall.
 
-[Unreleased]: https://github.com/Shamanthpoojary/UartX/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/Shamanthpoojary/UartX/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/Shamanthpoojary/UartX/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/Shamanthpoojary/UartX/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/Shamanthpoojary/UartX/releases/tag/v1.0.0

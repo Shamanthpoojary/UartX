@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.19)
-project(UartX VERSION 1.1.0 LANGUAGES CXX)
+project(UartX VERSION 1.1.1 LANGUAGES CXX)
 
 # Qt 6.2 is the floor so the Qt versions bundled with current LTS toolchains
 # work unchanged (Ubuntu 22.04 ships 6.2; Debian 12 and Ubuntu 24.04 ship 6.4).
@@ -124,6 +124,35 @@ endif()
 install(TARGETS UartX
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
+
+if(MINGW)
+    # The executable imports libgcc and libstdc++ directly, so a package
+    # without them refuses to start on any machine that does not already have
+    # MinGW -- with a "DLL not found" box and nothing else to go on.
+    #
+    # windeployqt does copy them, but only when it can find the toolchain on
+    # PATH. That happens to be true for scripts/build_release.bat and is not
+    # true on CI, which is exactly how a broken package gets published while
+    # every local build works. Resolving them from the compiler itself removes
+    # the dependency on PATH entirely.
+    get_filename_component(MINGW_BIN_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
+    set(MINGW_RUNTIME_DLLS "")
+    foreach(_dll libgcc_s_seh-1.dll libgcc_s_dw2-1.dll
+                 libstdc++-6.dll libwinpthread-1.dll)
+        if(EXISTS "${MINGW_BIN_DIR}/${_dll}")
+            list(APPEND MINGW_RUNTIME_DLLS "${MINGW_BIN_DIR}/${_dll}")
+        endif()
+    endforeach()
+
+    if(MINGW_RUNTIME_DLLS)
+        install(FILES ${MINGW_RUNTIME_DLLS} DESTINATION ${CMAKE_INSTALL_BINDIR})
+    else()
+        message(FATAL_ERROR
+            "No MinGW runtime DLLs found next to ${CMAKE_CXX_COMPILER}.\n"
+            "A package built from here would not start on a clean machine. "
+            "Check that the compiler really is a MinGW toolchain.")
+    endif()
+endif()
 
 if(WIN32)
     # windeployqt copies the Qt runtime next to the executable so the result is

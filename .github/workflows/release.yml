@@ -1,7 +1,7 @@
 name: Release
 
 # Builds the Windows and Linux packages and attaches them to a GitHub Release.
-# Push a tag such as v1.1.0 to publish, or run the workflow by hand to get the
+# Push a tag such as v1.1.1 to publish, or run the workflow by hand to get the
 # artifacts without publishing.
 on:
   push:
@@ -101,6 +101,38 @@ jobs:
         run: |
           cmake --build build --target installer
           cmake --build build --target portable
+
+      # A package that is missing one DLL looks perfectly fine here and fails
+      # on the first machine that downloads it, with nothing but a "DLL not
+      # found" box. Walk what the staged binaries actually import and prove
+      # every one of them either ships with us or belongs to Windows.
+      - name: Verify the package has no missing dependencies
+        shell: pwsh
+        run: |
+          $stage = "build/stage"
+          $binaries = @(Get-ChildItem $stage -Filter *.exe) + @(Get-ChildItem $stage -Filter *.dll)
+          $imports = [System.Collections.Generic.HashSet[string]]::new()
+          foreach ($b in $binaries) {
+              $out = objdump -p $b.FullName 2>$null | Select-String 'DLL Name:\s*(\S+)'
+              foreach ($m in $out.Matches) { [void]$imports.Add($m.Groups[1].Value) }
+          }
+          if ($imports.Count -eq 0) { throw "could not read imports - is objdump on PATH?" }
+
+          $missing = @()
+          foreach ($name in $imports) {
+              if (Test-Path (Join-Path $stage $name)) { continue }
+              if (Test-Path (Join-Path "$env:SystemRoot\System32" $name)) { continue }
+              # API sets (api-ms-win-*, ext-ms-*) are virtual: the loader
+              # resolves them from the API set schema, and no such file exists
+              # on disk even on a healthy machine.
+              if ($name -like 'api-ms-*' -or $name -like 'ext-ms-*') { continue }
+              $missing += $name
+          }
+          Write-Output "checked $($binaries.Count) binaries, $($imports.Count) distinct imports"
+          if ($missing) {
+              throw "NOT shipped and NOT a Windows system DLL: $($missing -join ', ')"
+          }
+          Write-Output "every import resolves inside the package"
 
       - name: Collect artifacts and checksums
         shell: pwsh

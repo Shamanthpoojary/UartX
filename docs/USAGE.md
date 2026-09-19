@@ -115,7 +115,7 @@ independent of the session log. The file opens with a header recording exactly
 which settings produced it:
 
 ```
-===== UartX 1.1.0 - filtered output =====
+===== UartX 1.1.1 - filtered output =====
 Saved         : 2026-08-21 12:05:43
 Source        : COM5 @ 115200 baud
 Color rules   : Fatal

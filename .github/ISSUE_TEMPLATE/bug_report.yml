@@ -13,7 +13,7 @@ body:
     attributes:
       label: UartX version
       description: Shown in Help > About UartX.
-      placeholder: "1.1.0"
+      placeholder: "1.1.1"
     validations:
       required: true
 

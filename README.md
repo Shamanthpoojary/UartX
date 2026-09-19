@@ -15,6 +15,8 @@
 UartX is a UART-based debugging and analysis tool built specifically for
 embedded and firmware developers.
 
+### **[⬇ Download the latest release](https://github.com/Shamanthpoojary/UartX/releases/latest)** &nbsp;·&nbsp; [which file do I need?](#which-file-do-i-need)
+
 ## Sound familiar?
 
 Your board is printing at 115200 baud. Six tasks, all logging, all interleaved.
@@ -73,9 +75,29 @@ it. What lands on disk is what came off the wire.
 
 ## Install
 
-Everything comes from the
-**[Releases page](https://github.com/Shamanthpoojary/UartX/releases/latest)**.
-Pick the file for your system — nothing else needs installing first.
+Everything comes from one place:
+
+**→ [github.com/Shamanthpoojary/UartX/releases/latest](https://github.com/Shamanthpoojary/UartX/releases/latest)**
+
+> On that page the files are under **Assets**, which GitHub keeps collapsed —
+> click it to expand the list. Ignore *Source code (zip/tar.gz)*: those are
+> automatic and are not the application.
+
+### Which file do I need?
+
+| You are on | Take this | Then |
+| --- | --- | --- |
+| **Windows** — normal install | `UartX-<version>-setup.exe` | Run it. Installs per-user, no admin needed. |
+| **Windows** — nothing installed | `UartX-<version>-portable-win64.zip` | Unzip anywhere, run `UartX.exe`. |
+| **Linux** — any distribution | `UartX-<version>-x86_64.AppImage` | `chmod +x`, then run it. Bundles Qt, needs no root. |
+| **Linux** — Debian / Ubuntu / Mint / Raspberry Pi OS | `uartx_<version>_amd64.deb` | `sudo apt install ./uartx_*.deb` |
+| Verifying a download | `SHA256SUMS-windows.txt` / `SHA256SUMS-linux.txt` | See [Verifying a download](#verifying-a-download). |
+
+Everything else in Assets is either a checksum file or the plain tarball under
+[Other downloads](#other-downloads).
+
+Nothing needs installing first — each package carries its own Qt runtime or
+uses your distribution's.
 
 ### Windows
 
@@ -105,8 +127,8 @@ Both carry their own Qt runtime.
 
 ```bash
 cd ~/Downloads
-chmod +x UartX-1.1.0-x86_64.AppImage
-./UartX-1.1.0-x86_64.AppImage
+chmod +x UartX-1.1.1-x86_64.AppImage
+./UartX-1.1.1-x86_64.AppImage
 ```
 
 **Debian, Ubuntu, Mint, Raspberry Pi OS — `uartx_<version>_amd64.deb`**
@@ -115,8 +137,8 @@ A proper package: menu entry, icon, and your distribution's Qt rather than a
 bundled copy.
 
 ```bash
-cp uartx_1.1.0_amd64.deb /tmp/
-sudo apt install /tmp/uartx_1.1.0_amd64.deb
+cp uartx_1.1.1_amd64.deb /tmp/
+sudo apt install /tmp/uartx_1.1.1_amd64.deb
 ```
 
 Then launch **UartX** from the applications menu, or run `UartX` (capital U
@@ -168,7 +190,7 @@ sha256sum -c SHA256SUMS-linux.txt        # Linux
 ```
 
 ```powershell
-Get-FileHash UartX-1.1.0-setup.exe -Algorithm SHA256    # Windows
+Get-FileHash UartX-1.1.1-setup.exe -Algorithm SHA256    # Windows
 ```
 
 ## Quick start
