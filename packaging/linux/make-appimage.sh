@@ -13,7 +13,19 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-BUILD_DIR="${1:-$HERE/build/linux}"
+
+# Resolve the build directory to an absolute path before anything else. This
+# script cd's into it further down, which silently breaks every relative path
+# taken from the argument -- linuxdeploy then inspects a directory that does
+# not exist and reports "Could not find Qt modules to deploy". Passing an
+# absolute path hid that for anyone calling through build_release.sh, while a
+# caller that passed "build/linux" got no AppImage at all.
+BUILD_DIR_ARG="${1:-$HERE/build/linux}"
+if [ ! -d "$BUILD_DIR_ARG" ]; then
+    echo "ERROR: build directory not found: $BUILD_DIR_ARG" >&2
+    exit 1
+fi
+BUILD_DIR="$(cd "$BUILD_DIR_ARG" && pwd)"
 APPDIR="$BUILD_DIR/AppDir"
 TOOLS="$HERE/build/tools"
 
@@ -61,5 +73,15 @@ cd "$BUILD_DIR"
     --plugin qt \
     --output appimage
 
+# Prove something was actually produced. linuxdeploy can end up reporting a
+# problem without a non-zero exit, and a script that prints an empty "written
+# to:" line and exits 0 is how a release ships with no AppImage in it.
+IMAGE="$(ls -1 "$BUILD_DIR"/UartX*.AppImage 2>/dev/null | head -1)"
+if [ -z "$IMAGE" ] || [ ! -s "$IMAGE" ]; then
+    echo "ERROR: no AppImage was produced in $BUILD_DIR" >&2
+    exit 1
+fi
+
 echo
-echo "AppImage written to: $(ls -1 "$BUILD_DIR"/UartX*.AppImage 2>/dev/null | head -1)"
+echo "AppImage written to: $IMAGE"
+ls -la "$IMAGE"

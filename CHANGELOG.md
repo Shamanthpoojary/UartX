@@ -20,6 +20,15 @@ All notable changes to UartX are recorded here. The format follows
   `PATH`, and the release workflow fails if anything the staged binaries import
   is neither shipped nor a Windows system DLL.
 
+- **No AppImage was ever published.** `make-appimage.sh` cd's into the build
+  directory partway through, so a build directory passed as a relative path --
+  which is how the release workflow called it -- stopped resolving, and
+  linuxdeploy inspected a directory that did not exist. It reported "Could not
+  find Qt modules to deploy" and the script went on to print an empty "written
+  to:" line and exit successfully. Calling it through `build_release.sh`, which
+  passes an absolute path, always worked. The path is now resolved before
+  anything else, and the script fails if no image was produced.
+
 - **A new Filter window showed every line while all of its sources sat
   unticked.** Nothing ticked was treated as "no filtering" rather than "nothing
   chosen", so the checkboxes and the contents disagreed from the moment the

@@ -54,8 +54,17 @@ jobs:
       - name: Collect artifacts and checksums
         run: |
           mkdir -p dist
-          cp build/linux/*.deb build/linux/*.tar.gz dist/ 2>/dev/null || true
-          cp build/linux/UartX*.AppImage dist/ 2>/dev/null || true
+          cp build/linux/*.deb build/linux/*.tar.gz dist/
+
+          # The AppImage step is allowed to fail without taking the .deb down
+          # with it, so its absence has to be stated out loud here -- a silent
+          # "|| true" is how a release shipped without one and nobody noticed.
+          if ls build/linux/UartX*.AppImage >/dev/null 2>&1; then
+              cp build/linux/UartX*.AppImage dist/
+          else
+              echo "::warning title=No AppImage::The AppImage step produced nothing, so this release will ship without one."
+          fi
+
           ( cd dist && sha256sum * > SHA256SUMS-linux.txt )
           ls -la dist
           cat dist/SHA256SUMS-linux.txt
