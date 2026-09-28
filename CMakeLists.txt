@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.19)
-project(UartX VERSION 1.1.1 LANGUAGES CXX)
+project(UartX VERSION 1.1.2 LANGUAGES CXX)
 
 # Qt 6.2 is the floor so the Qt versions bundled with current LTS toolchains
 # work unchanged (Ubuntu 22.04 ships 6.2; Debian 12 and Ubuntu 24.04 ship 6.4).

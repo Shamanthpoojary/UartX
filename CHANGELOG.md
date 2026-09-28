@@ -6,6 +6,20 @@ All notable changes to UartX are recorded here. The format follows
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-09-28
+
+### Changed
+
+- **New logo, applied everywhere.** The app icon, the About box and the README
+  header now come from one pair of masters in `resources/logo/`, and
+  `scripts/make_icon.py` derives every size and ink from them — change the
+  masters, re-run the script, and nothing else needs editing.
+- The **app icon** is white artwork on a dark rounded plate. It is the one
+  asset that cannot adapt to its surroundings: it lands on a taskbar or
+  launcher that may be light or dark, and a single-ink transparent logo
+  disappears against one of them. Everywhere the background *is* known — the
+  About box, the README — the logo stays transparent and is re-inked to suit.
+
 ### Fixed
 
 - **Firmware that colours its own output was displayed as garbage.** A device
@@ -156,7 +170,8 @@ removing prints from the firmware.
   the target machine needs no Qt installation. The installer runs without
   administrator rights and leaves `config.json` alone on uninstall.
 
-[Unreleased]: https://github.com/Shamanthpoojary/UartX/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/Shamanthpoojary/UartX/compare/v1.1.2...HEAD
+[1.1.2]: https://github.com/Shamanthpoojary/UartX/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/Shamanthpoojary/UartX/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/Shamanthpoojary/UartX/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/Shamanthpoojary/UartX/releases/tag/v1.0.0

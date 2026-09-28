@@ -177,28 +177,39 @@ existing installation in place rather than leaving two entries behind.
 Silent install, for scripted rollout:
 
 ```
-UartX-1.1.1-setup.exe /VERYSILENT /SUPPRESSMSGBOXES
+UartX-1.1.2-setup.exe /VERYSILENT /SUPPRESSMSGBOXES
 ```
 
 ## Regenerating the icons
 
-`scripts/make_icon.py` rebuilds `resources/uartx.ico` and everything in
-`resources/icons/`. It needs Pillow:
+Every brand asset is derived from two masters, so the logo is changed in one
+place and regenerated everywhere:
+
+```
+resources/logo/uartx-512-white.png    the artwork in white, on transparency
+resources/logo/uartx-512-black.png    the same artwork in black
+```
 
 ```
 pip install pillow
-python scripts\make_icon.py
+python scripts/make_icon.py
 ```
 
-The app icon and the in-app wordmark are white on a transparent background.
-The wordmark is tinted at run time to whichever of black or white stays
-readable against the surface it is drawn on, so it must have no background of
-its own.
+That writes:
 
-`docs/Images/wordmark-light.png` and `wordmark-dark.png` are the README's copies
-of that same mask, re-inked ahead of time because a page cannot tint an image:
-the alpha channel carries the shape, so both are produced by replacing the
-colour and keeping the alpha. Regenerate them if the wordmark ever changes.
+| Output | Treatment | Why |
+| --- | --- | --- |
+| `resources/uartx.ico` | white on a dark rounded plate | The app icon is the one asset that cannot adapt — it lands on a taskbar or launcher that may be light or dark, and a single-ink transparent logo disappears against one of them. |
+| `resources/icons/uartx_<N>.png` | same plate, 16–256 | Qt loads these without the ICO image plugin, which is not always deployed, and the Linux icon theme wants PNGs. |
+| `resources/icons/uartx_logo.png` | white, transparent, no plate | A **mask**: `Theme::wordmark()` re-inks it at run time to whichever of black or white contrasts with the dialog it is drawn on. It must have no background of its own. |
+| `docs/Images/wordmark-{light,dark}.png` | black / white, transparent | A web page cannot tint an image, so both inks ship and a `<picture>` element picks one from the reader's theme. |
+| `resources/icons/chevron_down*.png`, `check.png` | drawn, not derived | Qt stops drawing its own arrow once `QComboBox::drop-down` is styled, and the same goes for a styled checkbox tick. |
+
+Each icon frame is composed at its own size rather than downscaled from one
+master, so the plate's corner radius and hairline edge stay crisp at 16 px.
+
+To change the logo, replace the two masters and re-run the script — nothing
+else needs editing.
 
 ## Cutting a release
 
@@ -209,8 +220,8 @@ colour and keeping the alpha. Regenerate them if the wordmark ever changes.
 3. Commit, then push a tag:
 
    ```
-   git tag v1.1.2
-   git push origin v1.1.2
+   git tag v1.1.3
+   git push origin v1.1.3
    ```
 
 The **Release** workflow then builds both platforms in parallel and attaches
@@ -255,7 +266,7 @@ Sign both the executable and the setup program, in that order:
 
 ```
 signtool sign /f cert.pfx /p <password> /tr http://timestamp.digicert.com /td sha256 /fd sha256 UartX.exe
-signtool sign /f cert.pfx /p <password> /tr http://timestamp.digicert.com /td sha256 /fd sha256 UartX-1.1.1-setup.exe
+signtool sign /f cert.pfx /p <password> /tr http://timestamp.digicert.com /td sha256 /fd sha256 UartX-1.1.2-setup.exe
 ```
 
 `signtool` ships with the Windows SDK.
@@ -284,7 +295,8 @@ signtool sign /f cert.pfx /p <password> /tr http://timestamp.digicert.com /td sh
 | `src/appconstants.h` | app identity, defaults, paths |
 | `resources/uartx.ico` | executable and installer icon |
 | `resources/app.rc.in` | executable icon and version metadata (configured by CMake) |
-| `resources/icons/` | icon sizes, wordmark and UI glyphs, compiled into the binary |
+| `resources/logo/` | the logo masters, in both inks — the source every other asset is derived from |
+| `resources/icons/` | icon sizes, the About-box mask and UI glyphs, compiled into the binary |
 | `packaging/windows/installer.iss.in` | Inno Setup script (configured by CMake) |
 | `packaging/linux/uartx.desktop.in` | desktop entry (configured by CMake) |
 | `packaging/linux/metainfo.xml.in` | AppStream metadata (configured by CMake) |

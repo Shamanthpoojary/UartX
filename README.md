@@ -2,7 +2,7 @@
      reader's theme -- the same thing the About box does at run time. -->
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/Images/wordmark-dark.png">
-  <img src="docs/Images/wordmark-light.png" alt="UartX" width="170">
+  <img src="docs/Images/wordmark-light.png" alt="UartX" width="96">
 </picture>
 
 **Turn thousands of lines of firmware output into the information you actually need.**
@@ -127,8 +127,8 @@ Both carry their own Qt runtime.
 
 ```bash
 cd ~/Downloads
-chmod +x UartX-1.1.1-x86_64.AppImage
-./UartX-1.1.1-x86_64.AppImage
+chmod +x UartX-1.1.2-x86_64.AppImage
+./UartX-1.1.2-x86_64.AppImage
 ```
 
 **Debian, Ubuntu, Mint, Raspberry Pi OS — `uartx_<version>_amd64.deb`**
@@ -137,8 +137,8 @@ A proper package: menu entry, icon, and your distribution's Qt rather than a
 bundled copy.
 
 ```bash
-cp uartx_1.1.1_amd64.deb /tmp/
-sudo apt install /tmp/uartx_1.1.1_amd64.deb
+cp uartx_1.1.2_amd64.deb /tmp/
+sudo apt install /tmp/uartx_1.1.2_amd64.deb
 ```
 
 Then launch **UartX** from the applications menu, or run `UartX` (capital U
@@ -190,7 +190,7 @@ sha256sum -c SHA256SUMS-linux.txt        # Linux
 ```
 
 ```powershell
-Get-FileHash UartX-1.1.1-setup.exe -Algorithm SHA256    # Windows
+Get-FileHash UartX-1.1.2-setup.exe -Algorithm SHA256    # Windows
 ```
 
 ## Quick start

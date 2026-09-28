@@ -532,11 +532,15 @@ AboutDialog::AboutDialog(QWidget *parent)
     auto *header = new QHBoxLayout;
     header->setSpacing(14);
 
-    // The wordmark is the product name, so no separate title label beside it.
-    // It is tinted to whatever contrasts with the dialog, so the same
-    // transparent asset works on a dark or a light surface.
+    // The logo carries the product name, so there is no separate title label
+    // beside it. It is tinted to whatever contrasts with the dialog, so the
+    // same transparent asset works on a dark or a light surface.
+    //
+    // 96 rather than the 190 the old wide wordmark used: this artwork is
+    // square, so the width is also the height, and a 190px block would tower
+    // over the two lines of text sitting next to it.
     const QPixmap logo = Theme::wordmark(
-        Theme::contrastingInk(palette().color(QPalette::Window)), 190);
+        Theme::contrastingInk(palette().color(QPalette::Window)), 96);
     if (!logo.isNull()) {
         auto *logoLabel = new QLabel(this);
         logoLabel->setPixmap(logo);
