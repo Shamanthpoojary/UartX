@@ -1,4 +1,5 @@
 #include "lineformat.h"
+#include "lineassembler.h"
 
 namespace LineFormat {
 
@@ -30,8 +31,10 @@ QString prefix(const DisplayOptions &options, bool isTx, const QDateTime &when)
 
 QString body(const DisplayOptions &options, const QString &raw)
 {
+    // Only the ASCII view is cleaned. The HEX views exist precisely to show
+    // what actually arrived, escape bytes included, so they get the raw line.
     if (options.mode == QLatin1String("ASCII"))
-        return raw;
+        return stripEscapeSequences(raw);
 
     const bool withAscii = (options.mode == QLatin1String("HEX + ASCII"));
 

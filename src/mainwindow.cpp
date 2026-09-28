@@ -868,7 +868,6 @@ bool MainWindow::openLog(const QString &port)
     // session starts, but the file itself waits for the first byte -- a
     // session that receives nothing should leave nothing behind.
     m_logPath = QDir(dir).filePath(expandTemplate(m_state.settings.logTemplate, port));
-    m_logSessionStart = QDateTime::currentDateTime();
     m_logArmed = true;
     return true;
 }
@@ -897,12 +896,13 @@ bool MainWindow::createLogFile()
         return false;
     }
 
+    // No header. The session log is the bytes the device sent and nothing
+    // else, which is the guarantee the rest of the tool is built on -- a
+    // banner line would be the one thing in the file the device did not send,
+    // and it breaks anything that parses or diffs a capture. The date, time
+    // and port already live in the file name, and a Filter window's "Save
+    // output" is the place for a header describing how a view was produced.
     m_logFile = file;
-    const QString header = QStringLiteral("===== %1 log  %2  %3 @ %4 =====\n")
-                               .arg(App::NAME,
-                                    m_logSessionStart.toString(QStringLiteral("yyyy-MM-dd HH:mm:ss")),
-                                    m_state.settings.port, m_state.settings.baud);
-    m_logFile->write(header.toUtf8());
     return true;
 }
 
@@ -931,10 +931,15 @@ void MainWindow::logWrite(const QString &text, bool newline)
         if (!createLogFile())
             return;
     }
-    QString out = sanitizeForLog(text);
+    // Written back exactly as received. feed() decoded the stream as latin-1,
+    // one code point per byte, so toLatin1() is its precise inverse -- toUtf8()
+    // would re-encode everything above 0x7F into two bytes and quietly corrupt
+    // the capture. Nothing is stripped: escape sequences and binary payloads
+    // belong in the log even though the ASCII view hides them.
+    QString out = text;
     if (newline)
         out.append(QLatin1Char('\n'));
-    m_logFile->write(out.toUtf8());
+    m_logFile->write(out.toLatin1());
 }
 
 // ------------------------------------------------------------- status + copy

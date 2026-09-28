@@ -6,6 +6,29 @@ All notable changes to UartX are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **Firmware that colours its own output was displayed as garbage.** A device
+  emitting ANSI escape sequences (`ESC[31m` and friends) had them rendered as
+  literal `[31m` noise around every line, because the ASCII view passed the
+  line to the widget untouched — UartX is a log viewer, not a terminal
+  emulator, so it never interpreted them. Escape sequences and stray control
+  bytes are now removed from the ASCII view. The HEX views still show every
+  byte, and colour rules still match the raw text, so nothing about filtering
+  changes.
+- **The session log was not the raw bytes, despite promising to be.** Every
+  byte below 0x20 or at/above 0x7F was replaced with `.` before writing, so
+  escape sequences, UTF-8 and binary payloads were destroyed in the capture —
+  while the display, which is where cleaning belonged, got the raw line. The
+  two were exactly inverted. The log is now written byte for byte, using a
+  latin-1 round trip so bytes above 0x7F are not re-encoded.
+- **The session log no longer starts with a header line.** A banner naming the
+  date, port and baud was the one thing in the file the device had not sent,
+  which broke the "exactly what came off the wire" guarantee and anything that
+  parses or diffs a capture. The file name already carries the date and port,
+  and a Filter window's **Save output** remains the place for a header that
+  describes how a view was produced.
+
 ## [1.1.1] - 2026-09-19
 
 ### Fixed

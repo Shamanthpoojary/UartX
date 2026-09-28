@@ -36,8 +36,15 @@ private:
     QElapsedTimer m_rxTimer;
 };
 
-/// Log sanitizer: keeps printable ASCII plus tab, turns anything else into '.'
-/// so text editors always detect the encoding correctly.
-QString sanitizeForLog(const QString &s);
+/// Removes ANSI/VT escape sequences and non-printable control bytes, keeping
+/// tabs.
+///
+/// For display only. Firmware that colours its own output emits sequences like
+/// ESC [ 3 1 m; a terminal emulator obeys them, but UartX is a viewer, so
+/// without this they reach the screen as literal "[31m" noise around every
+/// line. The bytes themselves are never altered -- colour rules still match the
+/// raw text, HEX view still shows every byte, and the session log still records
+/// exactly what arrived.
+QString stripEscapeSequences(const QString &s);
 
 #endif // LINEASSEMBLER_H

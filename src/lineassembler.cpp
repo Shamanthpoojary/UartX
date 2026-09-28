@@ -52,18 +52,60 @@ qint64 LineAssembler::msSinceLastRx() const
     return m_rxTimer.elapsed();
 }
 
-QString sanitizeForLog(const QString &s)
+QString stripEscapeSequences(const QString &s)
 {
     QString out;
     out.reserve(s.size());
-    for (const QChar c : s) {
-        const ushort u = c.unicode();
-        if (u == 0x09)
+
+    int i = 0;
+    const int n = s.size();
+    while (i < n) {
+        const ushort u = s.at(i).unicode();
+
+        if (u == 0x1B) {                     // ESC
+            if (i + 1 >= n) {                // dangling ESC at the end of a line
+                ++i;
+                continue;
+            }
+            const ushort next = s.at(i + 1).unicode();
+
+            if (next == '[') {
+                // CSI: ESC [ parameters, ending on a byte in 0x40..0x7E.
+                // Colour codes are this shape -- ESC [ 3 1 m.
+                i += 2;
+                while (i < n) {
+                    const ushort c = s.at(i).unicode();
+                    ++i;
+                    if (c >= 0x40 && c <= 0x7E)
+                        break;
+                }
+            } else if (next == ']') {
+                // OSC: ESC ] ... terminated by BEL, or by ST (ESC backslash).
+                i += 2;
+                while (i < n) {
+                    const ushort c = s.at(i).unicode();
+                    if (c == 0x07) { ++i; break; }
+                    if (c == 0x1B && i + 1 < n && s.at(i + 1) == QLatin1Char('\\')) {
+                        i += 2;
+                        break;
+                    }
+                    ++i;
+                }
+            } else if (next == '(' || next == ')' || next == '*' || next == '+') {
+                i += 3;                      // charset selection: ESC ( B
+            } else {
+                i += 2;                      // any other two-byte escape
+            }
+            continue;
+        }
+
+        if (u == 0x09)                       // tabs are worth keeping
             out.append(QLatin1Char('\t'));
-        else if (u < 0x20 || u >= 0x7F)
-            out.append(QLatin1Char('.'));
-        else
-            out.append(c);
+        else if (u >= 0x20 && u != 0x7F)
+            out.append(s.at(i));
+        // anything else is a control byte with nothing to show
+
+        ++i;
     }
     return out;
 }

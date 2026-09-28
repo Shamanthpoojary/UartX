@@ -164,7 +164,6 @@ private:
     QFile    *m_logFile = nullptr;
     QString   m_logPath;
     bool      m_logArmed = false;      // logging wanted, file not created yet
-    QDateTime m_logSessionStart;
 
     // ---- filter windows ----
     QVector<FilterWindow *> m_filterWindows;
