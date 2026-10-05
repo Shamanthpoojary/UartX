@@ -127,8 +127,8 @@ Both carry their own Qt runtime.
 
 ```bash
 cd ~/Downloads
-chmod +x UartX-1.1.2-x86_64.AppImage
-./UartX-1.1.2-x86_64.AppImage
+chmod +x UartX-1.2.0-x86_64.AppImage
+./UartX-1.2.0-x86_64.AppImage
 ```
 
 **Debian, Ubuntu, Mint, Raspberry Pi OS — `uartx_<version>_amd64.deb`**
@@ -137,8 +137,8 @@ A proper package: menu entry, icon, and your distribution's Qt rather than a
 bundled copy.
 
 ```bash
-cp uartx_1.1.2_amd64.deb /tmp/
-sudo apt install /tmp/uartx_1.1.2_amd64.deb
+cp uartx_1.2.0_amd64.deb /tmp/
+sudo apt install /tmp/uartx_1.2.0_amd64.deb
 ```
 
 Then launch **UartX** from the applications menu, or run `UartX` (capital U
@@ -190,7 +190,7 @@ sha256sum -c SHA256SUMS-linux.txt        # Linux
 ```
 
 ```powershell
-Get-FileHash UartX-1.1.2-setup.exe -Algorithm SHA256    # Windows
+Get-FileHash UartX-1.2.0-setup.exe -Algorithm SHA256    # Windows
 ```
 
 ## Quick start
@@ -211,7 +211,10 @@ Full walkthrough: **[docs/USAGE.md](docs/USAGE.md)**.
   containing the keyword is shown entirely in that colour. Rules are evaluated in
   order and the first match wins, so specific rules sit above general ones.
   Reorder, disable or make them case-sensitive without deleting anything.
-- **Filter windows** — separate windows showing only the lines you select, by
+- **Filter views, docked or floating** — a filtered view opens beside the
+  terminal so you never lose sight of the full stream, and pops out into its
+  own window when you want it on a second monitor.
+- **Filter windows** — showing only the lines you select, by
   colour rule or by text filter. Tick several and a line shows if it matches any
   of them. Open as many windows as you need; each keeps its own selection and
   follows the live stream on its own.
@@ -230,6 +233,9 @@ Full walkthrough: **[docs/USAGE.md](docs/USAGE.md)**.
 - **Send box with history** — type a command, press Enter, recall earlier
   commands with Up/Down. Recalled text stays editable, and history persists
   between runs.
+- **Honours the device's own colours** — firmware that colour-codes its output
+  with ANSI escapes is shown that way, while your colour rules still win on any
+  line they match.
 - **Optional display aids** — millisecond timestamps, RX/TX indicators, and
   ASCII / HEX / HEX + ASCII modes. All off by default and strictly display-only:
   switching to hex never changes which lines your rules match, and never changes

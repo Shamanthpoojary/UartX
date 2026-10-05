@@ -89,6 +89,35 @@ void TerminalView::appendLine(const QString &prefix, const QColor &prefixColor,
         scrollToBottom();
 }
 
+void TerminalView::appendSpans(const QString &prefix, const QColor &prefixColor,
+                               const QVector<AnsiSpan> &spans, const QColor &fallback,
+                               bool newline)
+{
+    QTextCursor cur(document());
+    cur.movePosition(QTextCursor::End);
+
+    if (!m_partialOpen && !prefix.isEmpty())
+        cur.insertText(prefix, formatFor(prefixColor));
+
+    for (const AnsiSpan &span : spans) {
+        if (span.text.isEmpty())
+            continue;
+        // A continuation of an already-printed partial line stays uncoloured,
+        // matching appendLine(): recolouring mid-line would rewrite what the
+        // reader has already seen.
+        const QColor ink = m_partialOpen ? QColor()
+                                         : Theme::ansiColor(span.color, fallback);
+        cur.insertText(span.text, m_partialOpen ? m_defaultFormat : formatFor(ink));
+    }
+    if (newline)
+        cur.insertText(QString(QLatin1Char('\n')), m_defaultFormat);
+
+    m_partialOpen = !newline;
+
+    if (m_autoscroll && !m_batching)
+        scrollToBottom();
+}
+
 void TerminalView::clearScreen()
 {
     clear();

@@ -1,6 +1,8 @@
 #ifndef LINEFORMAT_H
 #define LINEFORMAT_H
 
+#include "lineassembler.h"
+
 #include <QString>
 #include <QStringList>
 #include <QColor>
@@ -30,6 +32,12 @@ struct LineRecord
     QString body;         ///< the raw line rendered per the display mode
     QColor  color;        ///< colour-rule colour, or the default/TX shade
     QString colorRule;    ///< name of the rule that matched, empty if none
+
+    /// The line split into the colour runs the device asked for. Empty unless
+    /// the ASCII view is active and the device actually sent colour; a
+    /// matching colour rule takes precedence over these, because a rule is the
+    /// user stating what matters and that outranks the firmware's own opinion.
+    QVector<AnsiSpan> spans;
     bool    isTx = false; ///< true for data this application sent
 
     /// What a "save the visible text" operation should write.

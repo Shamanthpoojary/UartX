@@ -38,6 +38,9 @@ struct AppSettings
     bool    showTimestamps = false;
     bool    showDirection  = false;
     QString displayMode    = QStringLiteral("ASCII");
+    // Firmware that colours its own output is saying something; obeying it
+    // costs nothing and a colour rule still wins where one matches.
+    bool    deviceColors   = true;
 
     // --- transmit ---
     QStringList txHistory;

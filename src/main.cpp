@@ -35,6 +35,9 @@ int main(int argc, char *argv[])
     Theme::apply(app);
 
     MainWindow window;
-    window.show();
+    // Maximised rather than true full screen: a debugging session wants every
+    // pixel of the log, but full screen would take the title bar and the
+    // taskbar with it, which is wrong for a window people keep beside an IDE.
+    window.showMaximized();
     return QApplication::exec();
 }

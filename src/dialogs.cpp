@@ -384,6 +384,17 @@ TerminalOptionsDialog::TerminalOptionsDialog(MainWindow *app)
     });
     root->addWidget(m_direction);
 
+    m_deviceColors = new QCheckBox(tr("Use the colors the device sends"), this);
+    m_deviceColors->setChecked(s.deviceColors);
+    m_deviceColors->setToolTip(
+        tr("Obey ANSI color codes in the incoming data.\n"
+           "A color rule still wins on any line it matches."));
+    connect(m_deviceColors, &QCheckBox::toggled, app, [app](bool v) {
+        app->settings().deviceColors = v;
+        app->scheduleConfigSave();
+    });
+    root->addWidget(m_deviceColors);
+
     auto *modeRow = new QHBoxLayout;
     modeRow->addWidget(new QLabel(tr("Display data as:"), this));
     m_displayMode = new QComboBox(this);

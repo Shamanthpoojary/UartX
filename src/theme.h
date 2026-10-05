@@ -45,6 +45,16 @@ QIcon appIcon();
 /// Black or white, whichever stays readable on `background`.
 QColor contrastingInk(const QColor &background);
 
+/// The colour for an ANSI index 0..15, as sent by the device.
+///
+/// This is the one place colour enters the UI without the user asking for it,
+/// and it is deliberate: firmware that colour-codes its own output is saying
+/// something, and a viewer that flattens it is throwing information away. The
+/// shades are muted to sit on the terminal's near-black background rather than
+/// the harsh primaries a bare VT palette would give. An index outside the
+/// range returns `fallback`, which is what an uncoloured line gets.
+QColor ansiColor(int index, const QColor &fallback);
+
 /// The UartX wordmark, recoloured to `ink` and scaled to `width` pixels.
 /// The asset itself is a transparent white mask, so it carries no background
 /// of its own and can sit on any surface.

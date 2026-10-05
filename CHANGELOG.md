@@ -6,6 +6,34 @@ All notable changes to UartX are recorded here. The format follows
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-05
+
+### Added
+
+- **Filter views dock beside the terminal.** A new filter view opens in a
+  split pane to the right of the stream rather than as a separate window that
+  hides behind the main one the moment it loses focus. **Pop out** moves it to
+  its own window for a second monitor, **Dock** brings it back, and the divider
+  sets the balance. Several views stack across the splitter, each following the
+  live stream on its own.
+- **The colours the device sends are obeyed.** Firmware that colour-codes its
+  own output with ANSI escapes is shown in those colours. A matching colour
+  rule still wins on the lines it claims, because a rule is the user stating
+  what matters and that outranks the firmware's opinion. The palette is muted
+  to sit on the terminal's near-black background rather than using the raw VT
+  primaries, and it can be switched off under *Settings > Terminal*.
+- The window opens maximised, so a session starts with the whole log visible.
+
+### Changed
+
+- **The ribbon fills the width of the window.** Spare width is shared between
+  the group boxes instead of pooling into one dead gap at the right-hand end.
+  The 12px spacing between groups is unchanged, so the grouping reads the same
+  at any size.
+- **The ribbon's collapse control is a real button** carrying the same chevron
+  the combo boxes use, rather than the platform style's small filled triangle,
+  which matched nothing else on screen.
+
 ## [1.1.2] - 2026-09-28
 
 ### Changed
@@ -170,7 +198,8 @@ removing prints from the firmware.
   the target machine needs no Qt installation. The installer runs without
   administrator rights and leaves `config.json` alone on uninstall.
 
-[Unreleased]: https://github.com/Shamanthpoojary/UartX/compare/v1.1.2...HEAD
+[Unreleased]: https://github.com/Shamanthpoojary/UartX/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/Shamanthpoojary/UartX/compare/v1.1.2...v1.2.0
 [1.1.2]: https://github.com/Shamanthpoojary/UartX/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/Shamanthpoojary/UartX/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/Shamanthpoojary/UartX/compare/v1.0.0...v1.1.0

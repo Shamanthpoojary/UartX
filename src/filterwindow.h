@@ -63,6 +63,26 @@ class FilterWindow : public QWidget
 public:
     FilterWindow(MainWindow *app, const QString &title);
 
+    /// True while this view sits in the main window's splitter rather than in
+    /// a window of its own.
+    bool isDocked() const { return m_docked; }
+
+    /// Moves the view between the splitter and a free-floating window.
+    /// Docked is the default: a filtered view is read beside the full stream,
+    /// not instead of it, and a separate window hides behind the main one the
+    /// moment it loses focus.
+    void setDocked(bool docked);
+
+signals:
+    /// Asks the main window to take this view out of, or back into, its
+    /// splitter. The view cannot reparent itself without the splitter.
+    void dockRequested(FilterWindow *self, bool docked);
+
+    /// Asks the main window to drop this view entirely.
+    void closeRequested(FilterWindow *self);
+
+public:
+
     /// Live feed from the main window (upcoming data only). Matching uses the
     /// record's raw text, so filters keep working in any display mode.
     void onLine(const LineRecord &record);
@@ -95,6 +115,7 @@ private:
     void append(const LineRecord &record);
     void runSearch(bool backwards, bool fromCursor);
     void updateSearchStatus();
+    void updateDockButton();
     void setFollowLive(bool on);
     void setCount(const QString &text);
     void showTemporaryNotice(const QString &message);
@@ -120,6 +141,10 @@ private:
     QPushButton *m_editBtn      = nullptr;
     QPushButton *m_deleteBtn    = nullptr;
     QTimer      *m_noticeTimer  = nullptr;
+    QPushButton *m_dockBtn      = nullptr;
+    QLabel      *m_titleLabel   = nullptr;
+    QString      m_title;
+    bool         m_docked       = true;
 
     /// Remembered across rebuilds, so editing a rule or filter does not
     /// silently change what an open window is showing.

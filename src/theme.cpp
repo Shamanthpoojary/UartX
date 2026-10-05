@@ -76,8 +76,15 @@ QString styleSheet()
         }
         #ribbonGroupTitle { color: #7d7d7d; font-size: 10px; }
         #ribbonSummary { color: #9a9a9a; padding-left: 4px; }
-        #ribbonChevron { border: none; }
-        #ribbonChevron:hover { background: #303030; border-radius: 4px; }
+        /* A real button rather than a bare glyph: it is the only way to fold
+           the ribbon away, so it has to look clickable. */
+        #ribbonChevron {
+            background: #232323;
+            border: 1px solid #333333;
+            border-radius: 5px;
+        }
+        #ribbonChevron:hover   { background: #303030; border-color: #4a4a4a; }
+        #ribbonChevron:pressed { background: #3a3a3a; }
         #fieldLabel { color: #b4b4b4; }
 
         QLabel { color: #d8d8d8; }
@@ -312,6 +319,27 @@ QColor Theme::contrastingInk(const QColor &background)
                       + 0.587 * background.green()
                       + 0.114 * background.blue();
     return luma < 128.0 ? QColor(Qt::white) : QColor(Qt::black);
+}
+
+QColor Theme::ansiColor(int index, const QColor &fallback)
+{
+    // Muted rather than the raw VT primaries: pure #ff0000 on a near-black
+    // terminal vibrates, and index 0 is literally black, which would be
+    // invisible. These sit on #0c0c0c and stay distinguishable from each other
+    // without shouting over the user's own colour rules.
+    static const QColor palette[16] = {
+        QColor(0x5c, 0x63, 0x70), QColor(0xe0, 0x6c, 0x75),   // black,   red
+        QColor(0x98, 0xc3, 0x79), QColor(0xd1, 0x9a, 0x66),   // green,   yellow
+        QColor(0x61, 0xaf, 0xef), QColor(0xc6, 0x78, 0xdd),   // blue,    magenta
+        QColor(0x56, 0xb6, 0xc2), QColor(0xab, 0xb2, 0xbf),   // cyan,    white
+        QColor(0x7f, 0x84, 0x8e), QColor(0xff, 0x7b, 0x86),   // bright black, red
+        QColor(0xb5, 0xe8, 0x90), QColor(0xe5, 0xc0, 0x7b),   // bright green, yellow
+        QColor(0x7f, 0xc4, 0xff), QColor(0xdc, 0x9f, 0xf0),   // bright blue, magenta
+        QColor(0x6f, 0xd8, 0xe4), QColor(0xff, 0xff, 0xff),   // bright cyan, white
+    };
+    if (index < 0 || index > 15)
+        return fallback;
+    return palette[index];
 }
 
 QPixmap Theme::wordmark(const QColor &ink, int width)

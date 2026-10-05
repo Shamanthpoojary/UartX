@@ -80,8 +80,15 @@ Debug). They are only a suggestion; edit or delete them freely.
 
 ## 5. Filters — show only the lines you want
 
-*Tools > New filter window* (**Ctrl+F**). A Filter window shows a subset of the
-traffic, chosen two ways:
+*Tools > New filter window* (**Ctrl+F**). A filter view opens **beside the
+terminal**, splitting the window so you read the filtered lines without losing
+sight of the stream they came from. Drag the divider to change the balance.
+
+**Pop out** moves that view into a window of its own — useful on a second
+monitor — and **Dock** puts it back. **Close** drops it. Open several and they
+stack across the splitter, each following the live stream independently.
+
+A filter view shows a subset of the traffic, chosen two ways:
 
 - **Colour rules** — tick a rule to show every line it highlights. The
   categories you already defined for colouring double as filters, and the
@@ -115,7 +122,7 @@ independent of the session log. The file opens with a header recording exactly
 which settings produced it:
 
 ```
-===== UartX 1.1.2 - filtered output =====
+===== UartX 1.2.0 - filtered output =====
 Saved         : 2026-08-21 12:05:43
 Source        : COM5 @ 115200 baud
 Color rules   : Fatal
@@ -134,10 +141,17 @@ Under *Settings > Terminal*, off until you turn them on:
 | Timestamps | prefixes each line with its arrival time, to the millisecond |
 | RX / TX indicators | labels each line with its direction |
 | Display data as | shows traffic as ASCII, HEX, or HEX + ASCII side by side |
+| Use the colors the device sends | obeys ANSI colour codes in the incoming data |
 
 These affect the display only. The session log always records the raw UART
 data, and colour rules and filters always match the raw text, so switching to
 hex never changes which lines match.
+
+**Device colours.** Firmware that colours its own output with ANSI codes is
+shown in those colours rather than having them stripped. Where one of your
+colour rules matches, the rule wins — a rule is you saying what matters, and
+that outranks the firmware's own opinion. Turn the option off to see every line
+in the default ink and let your rules do all the colouring.
 
 ## 6. Save UART logs
 

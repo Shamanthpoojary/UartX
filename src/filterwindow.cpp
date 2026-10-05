@@ -139,14 +139,39 @@ FilterWindow::FilterWindow(MainWindow *app, const QString &title)
 {
     setWindowTitle(QStringLiteral("%1 - %2").arg(title, App::NAME));
     setWindowIcon(Theme::appIcon());
-    resize(1000, 620);
-    setAttribute(Qt::WA_DeleteOnClose);
+    // Deliberately not WA_DeleteOnClose: the view starts life docked inside the
+    // main window, where "close" is a button rather than a window close, and
+    // the main window owns the decision to destroy it either way.
 
     m_baseCount = tr("0 lines");
+    m_title = title;
 
     auto *root = new QVBoxLayout(this);
     root->setContentsMargins(10, 10, 10, 10);
     root->setSpacing(8);
+
+    // --- title strip -------------------------------------------------------
+    // Docked, this view has no title bar of its own, so it needs to say what
+    // it is and offer the two things a title bar would: undock, and close.
+    auto *titleRow = new QHBoxLayout;
+    titleRow->setSpacing(6);
+
+    m_titleLabel = new QLabel(title, this);
+    m_titleLabel->setObjectName(QStringLiteral("fieldLabel"));
+    titleRow->addWidget(m_titleLabel);
+    titleRow->addStretch(1);
+
+    m_dockBtn = new QPushButton(this);
+    m_dockBtn->setFixedWidth(104);
+    connect(m_dockBtn, &QPushButton::clicked, this, [this] { setDocked(!m_docked); });
+    titleRow->addWidget(m_dockBtn);
+
+    auto *closeBtn = new QPushButton(tr("Close"), this);
+    closeBtn->setFixedWidth(72);
+    connect(closeBtn, &QPushButton::clicked, this, [this] { emit closeRequested(this); });
+    titleRow->addWidget(closeBtn);
+
+    root->addLayout(titleRow);
 
     auto *bar = new QHBoxLayout;
     bar->setSpacing(10);
@@ -262,6 +287,7 @@ FilterWindow::FilterWindow(MainWindow *app, const QString &title)
     });
 
     refreshSources(m_app->colorRules(), m_app->textFilters());
+    updateDockButton();
 }
 
 // ---------------------------------------------------------- selection lists
@@ -396,8 +422,12 @@ void FilterWindow::onLine(const LineRecord &record)
 
 void FilterWindow::append(const LineRecord &record)
 {
-    m_text->appendLine(record.prefix, QColor(App::TERM_META),
-                       record.body, record.color, true);
+    if (!record.spans.isEmpty())
+        m_text->appendSpans(record.prefix, QColor(App::TERM_META),
+                            record.spans, record.color, true);
+    else
+        m_text->appendLine(record.prefix, QColor(App::TERM_META),
+                           record.body, record.color, true);
     ++m_shown;
     m_baseCount = tr("%1 lines").arg(m_shown);
     setCount(m_baseCount);
@@ -695,9 +725,35 @@ void FilterWindow::showTemporaryNotice(const QString &message)
     m_noticeTimer->start(App::NOTIFICATION_MS);
 }
 
+void FilterWindow::setDocked(bool docked)
+{
+    if (m_docked == docked)
+        return;
+    m_docked = docked;
+    updateDockButton();
+    // Only the main window owns the splitter, so the actual reparenting has to
+    // happen there.
+    emit dockRequested(this, docked);
+}
+
+void FilterWindow::updateDockButton()
+{
+    m_dockBtn->setText(m_docked ? tr("Pop out") : tr("Dock"));
+    m_dockBtn->setToolTip(m_docked
+                              ? tr("Move this view into a window of its own")
+                              : tr("Put this view back beside the terminal"));
+    // The title strip earns its place only while docked; a floating window
+    // already says what it is in its own title bar.
+    m_titleLabel->setVisible(m_docked);
+}
+
 void FilterWindow::closeEvent(QCloseEvent *e)
 {
+    // Only reachable while floating -- a docked view has no title bar to close.
+    // WA_DeleteOnClose is gone now that the view can live inside the splitter,
+    // so the destruction has to be asked for explicitly.
     m_noticeTimer->stop();
     m_app->unregisterFilterWindow(this);
     e->accept();
+    deleteLater();
 }

@@ -1,6 +1,8 @@
 #ifndef TERMINALVIEW_H
 #define TERMINALVIEW_H
 
+#include "lineassembler.h"
+
 #include <QPlainTextEdit>
 #include <QHash>
 #include <QTextCharFormat>
@@ -28,6 +30,13 @@ public:
     /// marker -- so the annotation sits behind the content it describes.
     void appendLine(const QString &prefix, const QColor &prefixColor,
                     const QString &line, const QColor &color, bool newline = true);
+
+    /// Appends a line made of several differently coloured runs, for output
+    /// the device coloured itself. `fallback` is used for any run the device
+    /// left at its default.
+    void appendSpans(const QString &prefix, const QColor &prefixColor,
+                     const QVector<AnsiSpan> &spans, const QColor &fallback,
+                     bool newline = true);
 
     void clearScreen();
 

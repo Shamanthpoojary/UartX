@@ -177,7 +177,7 @@ existing installation in place rather than leaving two entries behind.
 Silent install, for scripted rollout:
 
 ```
-UartX-1.1.2-setup.exe /VERYSILENT /SUPPRESSMSGBOXES
+UartX-1.2.0-setup.exe /VERYSILENT /SUPPRESSMSGBOXES
 ```
 
 ## Regenerating the icons
@@ -220,8 +220,8 @@ else needs editing.
 3. Commit, then push a tag:
 
    ```
-   git tag v1.1.3
-   git push origin v1.1.3
+   git tag v1.2.1
+   git push origin v1.2.1
    ```
 
 The **Release** workflow then builds both platforms in parallel and attaches
@@ -266,7 +266,7 @@ Sign both the executable and the setup program, in that order:
 
 ```
 signtool sign /f cert.pfx /p <password> /tr http://timestamp.digicert.com /td sha256 /fd sha256 UartX.exe
-signtool sign /f cert.pfx /p <password> /tr http://timestamp.digicert.com /td sha256 /fd sha256 UartX-1.1.2-setup.exe
+signtool sign /f cert.pfx /p <password> /tr http://timestamp.digicert.com /td sha256 /fd sha256 UartX-1.2.0-setup.exe
 ```
 
 `signtool` ships with the Windows SDK.

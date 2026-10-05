@@ -3,8 +3,31 @@
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QGridLayout>
+#include <QIcon>
 #include <QLabel>
+#include <QPixmap>
 #include <QToolButton>
+#include <QTransform>
+
+namespace {
+
+/// The ribbon's chevron, drawn from the same asset the combo boxes use so the
+/// two read as one control language. QToolButton::setArrowType paints a small
+/// filled triangle in the platform style, which matches nothing else here.
+QIcon chevronIcon(bool pointingUp)
+{
+    QPixmap pm(QStringLiteral(":/icons/chevron_down.png"));
+    if (pm.isNull())
+        return {};
+    if (pointingUp) {
+        QTransform flip;
+        flip.rotate(180);
+        pm = pm.transformed(flip, Qt::SmoothTransformation);
+    }
+    return QIcon(pm);
+}
+
+} // namespace
 
 // ---------------------------------------------------------------------------
 // RibbonGroup
@@ -64,7 +87,6 @@ RibbonBar::RibbonBar(QWidget *parent)
     m_bodyRow = new QHBoxLayout(m_body);
     m_bodyRow->setContentsMargins(0, 0, 0, 0);
     m_bodyRow->setSpacing(12);   // the gap between groups, uniform at any width
-    m_bodyRow->addStretch(1);    // keeps the groups packed to the left
     column->addWidget(m_body);
 
     m_summary = new QLabel(this);
@@ -78,7 +100,8 @@ RibbonBar::RibbonBar(QWidget *parent)
     m_chevron = new QToolButton(this);
     m_chevron->setObjectName(QStringLiteral("ribbonChevron"));
     m_chevron->setAutoRaise(true);
-    m_chevron->setFixedSize(22, 22);
+    m_chevron->setFixedSize(36, 24);
+    m_chevron->setIconSize(QSize(12, 12));
     m_chevron->setCursor(Qt::PointingHandCursor);
     connect(m_chevron, &QToolButton::clicked, this, [this] { setExpanded(!m_expanded); });
     outer->addWidget(m_chevron, 0, Qt::AlignTop);
@@ -89,11 +112,11 @@ RibbonBar::RibbonBar(QWidget *parent)
 RibbonGroup *RibbonBar::addGroup(const QString &title)
 {
     auto *group = new RibbonGroup(title, m_body);
-    // Insert ahead of the trailing stretch, so the groups stay left-aligned
-    // with one consistent gap between them however wide the window gets.
-    // Spreading them across the full width instead makes the gaps grow with
-    // the window and the grouping harder to read.
-    m_bodyRow->insertWidget(m_bodyRow->count() - 1, group);
+    // Every group carries the same stretch, so spare width is shared between
+    // the group boxes themselves rather than pooling into one dead gap at the
+    // right-hand end. The 12px spacing between them stays fixed either way,
+    // which is what keeps the grouping readable as the window grows.
+    m_bodyRow->addWidget(group, 1);
     ++m_groupCount;
     return group;
 }
@@ -125,7 +148,9 @@ void RibbonBar::setSummary(const QString &text)
 
 void RibbonBar::updateChevron()
 {
-    m_chevron->setArrowType(m_expanded ? Qt::UpArrow : Qt::DownArrow);
+    // Points the way the click will take the ribbon: up to fold it away, down
+    // to bring it back.
+    m_chevron->setIcon(chevronIcon(m_expanded));
     m_chevron->setToolTip(m_expanded ? tr("Collapse the ribbon")
                                      : tr("Expand the ribbon"));
     m_chevron->setAccessibleName(m_expanded ? tr("Collapse the ribbon")

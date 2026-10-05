@@ -16,6 +16,7 @@
 
 class TerminalView;
 class FilterWindow;
+class QSplitter;
 class RibbonBar;
 class QComboBox;
 class QCheckBox;
@@ -73,6 +74,9 @@ public:
     void closeLog();
 
     void unregisterFilterWindow(FilterWindow *win);
+
+    /// Moves a filter view between the splitter and its own window.
+    void setFilterWindowDocked(FilterWindow *win, bool docked);
     QStringList knownPorts() const { return m_knownPorts; }
 
     // --- named configurations ---
@@ -166,6 +170,7 @@ private:
     bool      m_logArmed = false;      // logging wanted, file not created yet
 
     // ---- filter windows ----
+    QSplitter *m_splitter = nullptr;
     QVector<FilterWindow *> m_filterWindows;
 
     // ---- widgets ----

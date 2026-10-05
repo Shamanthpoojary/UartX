@@ -9,6 +9,7 @@
 
 #include <QMenuBar>
 #include <QMenu>
+#include <QSplitter>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGridLayout>
@@ -232,7 +233,17 @@ void MainWindow::buildUi()
     txRow->addWidget(m_sendBtn);
 
     termLayout->addLayout(txRow);
-    root->addWidget(terminalWrap, 1);
+
+    // The terminal and any docked filter views share one horizontal splitter,
+    // so a filtered view sits beside the full stream instead of covering it.
+    // The splitter is always present, even with nothing docked, so adding the
+    // first view does not relayout the whole window.
+    m_splitter = new QSplitter(Qt::Horizontal, central);
+    m_splitter->setChildrenCollapsible(false);
+    m_splitter->setHandleWidth(6);
+    m_splitter->addWidget(terminalWrap);
+    m_splitter->setStretchFactor(0, 3);
+    root->addWidget(m_splitter, 1);
 
     m_statusLabel = new QLabel(m_currentStatus, this);
     m_statusLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
@@ -666,13 +677,30 @@ LineRecord MainWindow::makeRecord(const QString &raw, bool isTx) const
     else
         record.color = QColor(App::TERM_FG);
 
+    // The device's own colours are kept only where nothing else has claimed
+    // the line: a matching colour rule is the user saying what matters, and
+    // that outranks the firmware. The hex views show bytes, not colour, so
+    // they take none of this either.
+    const bool ruleWins = rule && m_state.settings.colorize;
+    if (!isTx && !ruleWins && m_state.settings.deviceColors
+        && options.mode == QLatin1String("ASCII")) {
+        QVector<AnsiSpan> spans = parseAnsiSpans(raw);
+        // One uncoloured run is just a plain line; let the simple path draw it.
+        if (spans.size() > 1 || (spans.size() == 1 && spans.first().color >= 0))
+            record.spans = spans;
+    }
+
     return record;
 }
 
 void MainWindow::publish(const LineRecord &record, bool newline)
 {
-    m_terminal->appendLine(record.prefix, QColor(App::TERM_META),
-                           record.body, record.color, newline);
+    if (!record.spans.isEmpty())
+        m_terminal->appendSpans(record.prefix, QColor(App::TERM_META),
+                                record.spans, record.color, newline);
+    else
+        m_terminal->appendLine(record.prefix, QColor(App::TERM_META),
+                               record.body, record.color, newline);
 
     // Only the raw bytes are logged: timestamps, direction markers, hex
     // rendering and colours are display concerns and never reach the file.
@@ -1028,7 +1056,37 @@ void MainWindow::openFilterWindow()
 {
     auto *win = new FilterWindow(this, tr("Filter"));
     m_filterWindows.append(win);
-    win->show();
+
+    connect(win, &FilterWindow::dockRequested, this, &MainWindow::setFilterWindowDocked);
+    connect(win, &FilterWindow::closeRequested, this, [this](FilterWindow *w) {
+        unregisterFilterWindow(w);
+        w->deleteLater();
+    });
+
+    setFilterWindowDocked(win, true);
+}
+
+void MainWindow::setFilterWindowDocked(FilterWindow *win, bool docked)
+{
+    if (docked) {
+        // The flag survives reparenting, so clearing it is what actually turns
+        // the floating window back into a plain child widget.
+        win->setWindowFlag(Qt::Window, false);
+        m_splitter->addWidget(win);
+        // Two thirds terminal, one third filter: enough of the filtered view
+        // to read, without losing sight of the stream it came from.
+        const int total = qMax(m_splitter->width(), 600);
+        m_splitter->setSizes({ total * 2 / 3, total / 3 });
+        win->show();
+    } else {
+        // Taking it out of the splitter first stops the layout briefly
+        // reparenting it back while the window flags change.
+        win->setParent(nullptr);
+        win->setWindowFlag(Qt::Window, true);
+        win->resize(1000, 620);
+        win->show();
+        win->raise();
+    }
 }
 
 void MainWindow::unregisterFilterWindow(FilterWindow *win)
@@ -1137,10 +1195,14 @@ void MainWindow::closeEvent(QCloseEvent *e)
     m_currentStatus = tr("Not connected");
     closeLog();
 
-    const QVector<FilterWindow *> windows = m_filterWindows;   // close() unregisters
-    for (FilterWindow *win : windows)
-        win->close();
+    // Docked views are children of the splitter and would go with it, but the
+    // floated ones are parentless and have to be taken down by hand.
+    const QVector<FilterWindow *> windows = m_filterWindows;
     m_filterWindows.clear();
+    for (FilterWindow *win : windows) {
+        win->hide();
+        win->deleteLater();
+    }
 
     saveConfigNow();
     e->accept();

@@ -84,6 +84,7 @@ private:
     QCheckBox *m_colorize;
     QCheckBox *m_timestamps;
     QCheckBox *m_direction;
+    QCheckBox *m_deviceColors;
     QComboBox *m_displayMode;
 };
 

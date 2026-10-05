@@ -1,7 +1,7 @@
 name: Release
 
 # Builds the Windows and Linux packages and attaches them to a GitHub Release.
-# Push a tag such as v1.1.2 to publish, or run the workflow by hand to get the
+# Push a tag such as v1.2.0 to publish, or run the workflow by hand to get the
 # artifacts without publishing.
 on:
   push:

@@ -42,6 +42,7 @@ QJsonObject AppSettings::toJson() const
     o["ribbonExpanded"] = ribbonExpanded;
     o["showTimestamps"] = showTimestamps;
     o["showDirection"]  = showDirection;
+    o["deviceColors"]   = deviceColors;
     o["displayMode"]    = displayMode;
     o["txHistory"]      = QJsonArray::fromStringList(txHistory);
     return o;
@@ -68,6 +69,7 @@ AppSettings AppSettings::fromJson(const QJsonObject &o)
     s.ribbonExpanded = o.value("ribbonExpanded").toBool(s.ribbonExpanded);
     s.showTimestamps = o.value("showTimestamps").toBool(s.showTimestamps);
     s.showDirection  = o.value("showDirection").toBool(s.showDirection);
+    s.deviceColors   = o.value("deviceColors").toBool(s.deviceColors);
     s.displayMode    = o.value("displayMode").toString(s.displayMode);
     if (!LineFormat::modes().contains(s.displayMode))
         s.displayMode = QStringLiteral("ASCII");
