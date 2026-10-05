@@ -312,6 +312,20 @@ QIcon Theme::appIcon()
     return icon;
 }
 
+QPixmap Theme::splashArt(int px)
+{
+    const QPixmap art(QStringLiteral(":/icons/uartx_256.png"));
+    if (art.isNull())
+        return {};
+
+    const qreal dpr = qApp ? qApp->devicePixelRatio() : qreal(1);
+    const int edge = qRound(px * dpr);
+    QPixmap scaled = art.scaled(edge, edge, Qt::KeepAspectRatio,
+                                Qt::SmoothTransformation);
+    scaled.setDevicePixelRatio(dpr);
+    return scaled;
+}
+
 QColor Theme::contrastingInk(const QColor &background)
 {
     // Rec. 601 luma: close enough to perceived brightness for a two-way choice.

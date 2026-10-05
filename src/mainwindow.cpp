@@ -263,7 +263,11 @@ void MainWindow::buildRibbon()
     g->addWidget(fieldLabel(tr("Port"), conn), 0, 0, Qt::AlignRight);
     m_portCombo = new QComboBox(conn);
     m_portCombo->setEditable(true);
-    m_portCombo->setMinimumWidth(104);
+    // Wide enough for the "no ports" message below to be read rather than
+    // elided to "No ports..."; port names themselves are far shorter.
+    m_portCombo->setMinimumWidth(148);
+    // The box is left empty when nothing is detected, so it needs to say why.
+    m_portCombo->lineEdit()->setPlaceholderText(tr("No ports found"));
     g->addWidget(m_portCombo, 0, 1);
 
     auto *refreshBtn = new QPushButton(tr("Refresh"), conn);
@@ -379,6 +383,11 @@ void MainWindow::buildRibbon()
 void MainWindow::syncFromSettings()
 {
     m_syncing = true;
+    // A loaded configuration carries the port it was saved with. Honouring it
+    // while the machine has no ports at all would put a dead name back in a
+    // box that is meant to be empty in exactly that case.
+    if (m_knownPorts.isEmpty())
+        m_state.settings.port.clear();
     m_portCombo->setCurrentText(m_state.settings.port);
     m_baudCombo->setCurrentText(m_state.settings.baud);
     m_autoscrollBox->setChecked(m_state.settings.autoscroll);
@@ -457,18 +466,26 @@ void MainWindow::refreshPorts(bool announce)
         m_portCombo->clear();
         m_portCombo->addItems(m_knownPorts);
 
-        // Only pick a port for the user when they have not chosen one yet, or
-        // when the one they chose is no longer present.
-        if (!m_knownPorts.isEmpty()
-            && (m_state.settings.port.isEmpty()
-                || !m_knownPorts.contains(m_state.settings.port))) {
+        if (m_knownPorts.isEmpty()) {
+            // Nothing is connected. Leaving the previous session's port in the
+            // box is a lie the user cannot see through -- an unplugged COM5
+            // looks exactly like a present one -- and Connect would then fail
+            // with an error about a port the machine never offered. Clear it
+            // and let the placeholder say so. A port the scan does not know
+            // can still be typed in; this is the same rule already applied
+            // when the scan does find something.
+            m_state.settings.port.clear();
+        } else if (m_state.settings.port.isEmpty()
+                   || !m_knownPorts.contains(m_state.settings.port)) {
+            // Only pick a port for the user when they have not chosen one yet,
+            // or when the one they chose is no longer present.
             m_state.settings.port = m_knownPorts.first();
         }
         m_portCombo->setCurrentText(m_state.settings.port);
     }
 
     m_portCombo->setToolTip(m_knownPorts.isEmpty()
-                                ? tr("No serial ports detected")
+                                ? tr("No serial ports detected - plug a device in and press Refresh")
                                 : tr("Detected: %1").arg(m_knownPorts.join(QStringLiteral(", "))));
     updateRibbonSummary();
 
@@ -1063,12 +1080,33 @@ void MainWindow::openFilterWindow()
         w->deleteLater();
     });
 
-    setFilterWindowDocked(win, true);
+    // The first view docks beside the terminal; every one after it opens as a
+    // window of its own. Stacking them all into the splitter divided the width
+    // again with each new view, until none of them was wide enough to read a
+    // log line -- and the terminal they were meant to be read against was the
+    // first thing squeezed out.
+    if (dockedFilterWindow())
+        win->setDocked(false);      // emits dockRequested, which floats it
+    else
+        setFilterWindowDocked(win, true);
+}
+
+FilterWindow *MainWindow::dockedFilterWindow() const
+{
+    for (int i = 0; i < m_splitter->count(); ++i)
+        if (auto *win = qobject_cast<FilterWindow *>(m_splitter->widget(i)))
+            return win;
+    return nullptr;
 }
 
 void MainWindow::setFilterWindowDocked(FilterWindow *win, bool docked)
 {
     if (docked) {
+        // One view at a time in the dock: whichever is there makes way, rather
+        // than the two of them sharing a space sized for one.
+        if (FilterWindow *current = dockedFilterWindow(); current && current != win)
+            current->setDocked(false);
+
         // The flag survives reparenting, so clearing it is what actually turns
         // the floating window back into a plain child widget.
         win->setWindowFlag(Qt::Window, false);

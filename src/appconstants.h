@@ -25,7 +25,7 @@
 namespace App {
 
 inline const QString NAME      = QStringLiteral("UartX");
-inline const QString TAGLINE   = QStringLiteral("UART debugging & log analysis for firmware developers");
+inline const QString TAGLINE   = QStringLiteral("UART debugging & log analysis");
 inline const QString VERSION   = QStringLiteral(APP_VERSION_STRING);
 inline const QString DEVELOPER = QStringLiteral("Shamanth");
 inline const QString YEAR      = QStringLiteral("2026");
@@ -133,6 +133,8 @@ inline constexpr int    POLL_INTERVAL_MS     = 40;     // UI drain cadence
 inline constexpr int    NOTIFICATION_MS      = 2000;   // "N characters copied" lifetime
 inline constexpr int    AUTOSAVE_DELAY_MS    = 800;    // debounce for writing config.json
 inline constexpr int    MAX_TX_HISTORY       = 50;     // remembered sent commands
+inline constexpr int    SPLASH_MS            = 900;    // startup logo, long enough to read
+inline constexpr int    SPLASH_PX            = 192;    // its size, points square
 
 } // namespace App
 

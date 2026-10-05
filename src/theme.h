@@ -42,6 +42,16 @@ QFont monospaceFont();
 /// not always deployed on Linux.
 QIcon appIcon();
 
+/// The startup logo, `px` points square, for the splash shown while the main
+/// window is built.
+///
+/// This is the app icon rather than the wordmark: it already carries its own
+/// dark rounded plate, so it needs nothing painted behind it and reads the
+/// same whatever desktop it lands on. Scaled for the display's device pixel
+/// ratio, because a splash is the first thing the user sees and a soft one
+/// says the wrong thing about the rest.
+QPixmap splashArt(int px);
+
 /// Black or white, whichever stays readable on `background`.
 QColor contrastingInk(const QColor &background);
 

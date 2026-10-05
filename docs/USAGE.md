@@ -23,6 +23,10 @@ The port list is populated from the machine: `COM1`, `COM3`, … on Windows;
 `/dev/ttyUSB0`, `/dev/ttyACM0`, `/dev/ttyAMA0`, … on Linux. You can also type a
 port the scan did not find.
 
+When nothing is connected the box is left empty and reads *No ports found*,
+rather than keeping the port from the last session — plug the device in and
+press **Refresh**.
+
 > **Linux permissions — do this once.** Serial devices belong to a group your
 > user is not in, so the first connection attempt fails with "permission
 > denied":
@@ -85,8 +89,14 @@ terminal**, splitting the window so you read the filtered lines without losing
 sight of the stream they came from. Drag the divider to change the balance.
 
 **Pop out** moves that view into a window of its own — useful on a second
-monitor — and **Dock** puts it back. **Close** drops it. Open several and they
-stack across the splitter, each following the live stream independently.
+monitor — and **Dock** puts it back. **Close** drops it.
+
+**Only the first view docks.** The split pane holds one filter view at a time;
+open a second and it arrives as a window of its own, which keeps the docked
+view and the terminal at a readable width however many views you have. Pressing
+**Dock** on a floating view swaps it into the pane and pops the current
+occupant out, so the split always shows the one view you picked for it. Every
+view follows the live stream independently, docked or not.
 
 A filter view shows a subset of the traffic, chosen two ways:
 
@@ -109,7 +119,8 @@ window mirrors the terminal instead of sitting empty.)
 **Quick find** narrows whatever gets through, without saving a filter.
 
 Open several Filter windows to watch different subsets side by side; each
-keeps its own selection. Filters apply to incoming lines only: a window starts
+keeps its own selection, and all but the docked one are ordinary windows you
+can move, resize and put on another screen. Filters apply to incoming lines only: a window starts
 empty and follows the live stream, which keeps it responsive on long captures.
 
 **Search captured lines** looks through what a window has already collected,

@@ -76,6 +76,10 @@ public:
     void unregisterFilterWindow(FilterWindow *win);
 
     /// Moves a filter view between the splitter and its own window.
+    ///
+    /// The splitter holds at most one filter view: several side by side leave
+    /// every one of them too narrow to read, which is the opposite of what
+    /// docking is for. Docking a second view pops the first one out.
     void setFilterWindowDocked(FilterWindow *win, bool docked);
     QStringList knownPorts() const { return m_knownPorts; }
 
@@ -172,6 +176,11 @@ private:
     // ---- filter windows ----
     QSplitter *m_splitter = nullptr;
     QVector<FilterWindow *> m_filterWindows;
+
+    /// The filter view currently sitting in the splitter, or nullptr.
+    /// Read from the splitter itself rather than from a flag, so it cannot
+    /// drift out of step with where the widgets actually are.
+    FilterWindow *dockedFilterWindow() const;
 
     // ---- widgets ----
     RibbonBar    *m_ribbon         = nullptr;

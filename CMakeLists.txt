@@ -30,7 +30,7 @@ include(GNUInstallDirs)
 
 set(APP_PRODUCT     "UartX")
 set(APP_COMPANY     "Shamanth")
-set(APP_DESCRIPTION "UART debugging and log analysis tool for firmware developers")
+set(APP_DESCRIPTION "UART debugging and log analysis tool")
 set(APP_COPYRIGHT   "Copyright (C) 2026 Shamanth")
 set(APP_PUBLISHER   "${APP_COMPANY}")
 set(APP_SUPPORT     "shamanth25402@gmail.com")

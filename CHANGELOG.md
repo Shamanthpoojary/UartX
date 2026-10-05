@@ -14,8 +14,15 @@ All notable changes to UartX are recorded here. The format follows
   split pane to the right of the stream rather than as a separate window that
   hides behind the main one the moment it loses focus. **Pop out** moves it to
   its own window for a second monitor, **Dock** brings it back, and the divider
-  sets the balance. Several views stack across the splitter, each following the
-  live stream on its own.
+  sets the balance.
+- **The dock holds one view at a time.** The first filter view opens beside the
+  terminal; every one after it opens as a window of its own, which is where a
+  second or third view wants to be anyway -- on another monitor, or overlapping
+  the stream while you read it. Stacking them all into the splitter divided the
+  width again with each new view until none of them was wide enough to hold a
+  log line, and squeezed out the terminal they were meant to be read against.
+  **Dock** on a floating view still works and pops out whichever view is in the
+  dock, so the split pane always shows the one view you chose for it.
 - **The colours the device sends are obeyed.** Firmware that colour-codes its
   own output with ANSI escapes is shown in those colours. A matching colour
   rule still wins on the lines it claims, because a rule is the user stating
@@ -23,6 +30,12 @@ All notable changes to UartX are recorded here. The format follows
   to sit on the terminal's near-black background rather than using the raw VT
   primaries, and it can be switched off under *Settings > Terminal*.
 - The window opens maximised, so a session starts with the whole log visible.
+- **The logo is shown while the window is built.** A fixed 192 pt mark, held for
+  the short moment startup takes, so launching UartX acknowledges the click
+  instead of leaving an empty desktop until a full-screen window appears out of
+  nowhere. Whatever the window build already consumed counts towards that
+  interval, so a slow machine waits less rather than more, and a click
+  dismisses it.
 
 ### Changed
 
@@ -33,6 +46,24 @@ All notable changes to UartX are recorded here. The format follows
 - **The ribbon's collapse control is a real button** carrying the same chevron
   the combo boxes use, rather than the platform style's small filled triangle,
   which matched nothing else on screen.
+- **The window title is shorter**: *UartX - UART debugging & log analysis*. A
+  title bar is read at a glance and competes for width with every other window
+  on the taskbar, so it should name the tool and what it does and stop there.
+  Who the tool is for is positioning, which belongs in the README and not in
+  the chrome of every window and every taskbar button. The same line is the
+  subtitle of the About box and the one-line description the Linux desktop
+  entry and the packages carry.
+
+### Fixed
+
+- **The port box went on showing a port that was no longer there.** When the
+  scan found nothing, the previous session's port was left sitting in the box,
+  where an unplugged `COM5` looked exactly like a present one -- and pressing
+  **Connect** then failed on a port the machine had never offered. With nothing
+  detected the box is now cleared and reads *No ports found*, the tooltip says
+  to plug a device in and press **Refresh**, and loading a saved configuration
+  cannot put a dead port back. A port the scan does not know can still be typed
+  in, exactly as before.
 
 ## [1.1.2] - 2026-09-28
 
