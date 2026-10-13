@@ -136,6 +136,18 @@ inline constexpr int    MAX_TX_HISTORY       = 50;     // remembered sent comman
 inline constexpr int    SPLASH_MS            = 900;    // startup logo, long enough to read
 inline constexpr int    SPLASH_PX            = 192;    // its size, points square
 
+/// Shortcut text as the platform spells it. Qt maps "Ctrl" to the Command
+/// key on macOS, so prose written as "Ctrl+R" would name a key combination
+/// that does nothing there; this rewrites it to the glyphs Mac menus use.
+inline QString nativeShortcuts(QString text)
+{
+#ifdef Q_OS_MACOS
+    text.replace(QStringLiteral("Ctrl+Shift+"), QStringLiteral("\u21e7\u2318"));
+    text.replace(QStringLiteral("Ctrl+"), QStringLiteral("\u2318"));
+#endif
+    return text;
+}
+
 } // namespace App
 
 #endif // APPCONSTANTS_H

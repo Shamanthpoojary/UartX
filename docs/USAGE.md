@@ -20,8 +20,15 @@ bits and flow control open *Settings > Serial port*. Settings take effect the
 next time the port is opened.
 
 The port list is populated from the machine: `COM1`, `COM3`, … on Windows;
-`/dev/ttyUSB0`, `/dev/ttyACM0`, `/dev/ttyAMA0`, … on Linux. You can also type a
-port the scan did not find.
+`/dev/ttyUSB0`, `/dev/ttyACM0`, `/dev/ttyAMA0`, … on Linux;
+`/dev/cu.usbserial-…`, `/dev/cu.usbmodem…`, `/dev/cu.SLAB_USBtoUART`, … on
+macOS. You can also type a port the scan did not find.
+
+> **macOS uses the `cu.*` nodes.** macOS creates two device files per adapter.
+> The `tty.*` one waits for a carrier-detect signal that USB-serial adapters
+> never raise, so UartX lists only the `cu.*` one. The built-in
+> `Bluetooth-Incoming-Port` is hidden. Paired Bluetooth serial devices do
+> appear, as on Linux. No group membership or `sudo` is needed on a Mac.
 
 When nothing is connected the box is left empty and reads *No ports found*,
 rather than keeping the port from the last session — plug the device in and
@@ -133,7 +140,7 @@ independent of the session log. The file opens with a header recording exactly
 which settings produced it:
 
 ```
-===== UartX 1.2.0 - filtered output =====
+===== UartX 1.3.0 - filtered output =====
 Saved         : 2026-08-21 12:05:43
 Source        : COM5 @ 115200 baud
 Color rules   : Fatal
@@ -208,10 +215,11 @@ Everything the user can change is stored in one file and reloaded at startup:
 | Platform | Location |
 | --- | --- |
 | Windows | `%LOCALAPPDATA%\UartX\config.json` |
+| macOS | `~/Library/Preferences/UartX/config.json` |
 | Linux | `~/.config/UartX/config.json` |
 
-Logs default to `Documents/UartX_Logs` under your home directory on both
-platforms, and can be pointed anywhere. The folder is created the first time a
+Logs default to `Documents/UartX_Logs` under your home directory on every
+platform, and can be pointed anywhere. The folder is created the first time a
 session needs it.
 
 It holds the serial settings, terminal options, log-saving state and path,
@@ -233,6 +241,11 @@ you exit.
 - **Help** — About UartX
 
 ## Keyboard and mouse
+
+On a Mac, every **Ctrl** shortcut below is **⌘ Command** instead (⌘R, ⌘F, ⌘L,
+⌘C, ⇧⌘R), and the About box shows them that way. The **Control** key itself
+is not a shortcut there: Control+C in the terminal sends 0x03 to the device,
+as in Terminal.app.
 
 | Input | Action |
 | --- | --- |

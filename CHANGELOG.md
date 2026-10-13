@@ -6,6 +6,40 @@ All notable changes to UartX are recorded here. The format follows
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-13
+
+### Added
+
+- **macOS support.** UartX now runs on every Mac with macOS 12 Monterey or
+  newer, as one universal app that is native on both Intel and Apple Silicon.
+  It ships as `UartX-<version>-macos.dmg`: open it and drag UartX onto
+  Applications. The app carries its own Qt, so nothing else needs installing.
+  - Serial ports are found under `/dev/cu.*`: `cu.usbserial-…`,
+    `cu.usbmodem…`, `cu.SLAB_USBtoUART`, `cu.wchusbserial…` and the like. The
+    `tty.*` twins, which wait for a carrier signal USB adapters never raise,
+    are left out, and so is the built-in `Bluetooth-Incoming-Port`.
+  - Non-standard baud rates (460800, 921600, 1500000, 2000000, …) work through
+    the macOS `IOSSIOSPEED` call, as they do on Linux through `termios2`.
+  - Shortcuts are shown the Mac way in the About box and tooltips (⌘R, ⌘F, ⌘L,
+    ⌘C). The Control key stays free, so Control+C in the terminal reaches the
+    device as 0x03, as it does in Terminal.app.
+  - The Release workflow builds, checks and attaches the `.dmg` and
+    `SHA256SUMS-macos.txt` alongside the Windows and Linux packages, and CI
+    builds macOS on every push.
+- `scripts/build_macos.sh` builds the app, and with `-p dmg` the disk image, in
+  one step.
+
+### Fixed
+
+- **A port another program already had open could be opened a second time**
+  on drivers that ignore `TIOCEXCL`. UartX now also takes the advisory lock
+  that screen, minicom and pyserial use, and says the port is in use instead of
+  silently sharing it.
+- **Mark and space parity on a system without them** now fail with a message
+  that names the setting. Before, the Linux flag value was applied blindly.
+- **The Filter view's "No text filters yet" hint** grew a horizontal scroll bar
+  when the docked pane was narrow. The hint now wraps to the width it has.
+
 ## [1.2.0] - 2026-10-05
 
 ### Added
@@ -229,7 +263,8 @@ removing prints from the firmware.
   the target machine needs no Qt installation. The installer runs without
   administrator rights and leaves `config.json` alone on uninstall.
 
-[Unreleased]: https://github.com/Shamanthpoojary/UartX/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/Shamanthpoojary/UartX/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/Shamanthpoojary/UartX/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/Shamanthpoojary/UartX/compare/v1.1.2...v1.2.0
 [1.1.2]: https://github.com/Shamanthpoojary/UartX/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/Shamanthpoojary/UartX/compare/v1.1.0...v1.1.1

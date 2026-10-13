@@ -577,7 +577,7 @@ AboutDialog::AboutDialog(QWidget *parent)
     auto *body = new QTextBrowser(this);
     body->setOpenExternalLinks(true);
     body->setFrameShape(QFrame::NoFrame);
-    body->setHtml(tr(
+    body->setHtml(App::nativeShortcuts(tr(
         "<style>"
         "  h3 { margin-top: 16px; margin-bottom: 4px; }"
         "  p, li { line-height: 145%; }"
@@ -742,7 +742,7 @@ AboutDialog::AboutDialog(QWidget *parent)
         "<a href=\"mailto:%2\">%2</a>.</p>"
         "<p style=\"color:#8a8f98;\">%1 %3 &middot; &copy; %4 %5 &middot; Built with Qt %6</p>"
         ).arg(App::NAME, App::SUPPORT_EMAIL, App::VERSION, App::YEAR, App::DEVELOPER,
-              QStringLiteral(QT_VERSION_STR)));
+              QStringLiteral(QT_VERSION_STR))));
     root->addWidget(body, 1);
 
     auto *close = new QPushButton(tr("Close"), this);

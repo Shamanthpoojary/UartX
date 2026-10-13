@@ -9,6 +9,7 @@
 
 #include <dirent.h>
 #include <fcntl.h>
+#include <sys/file.h>
 #include <sys/ioctl.h>
 #include <sys/select.h>
 #include <sys/stat.h>
@@ -40,10 +41,23 @@ struct termios2
 };
 #endif
 
-// Mark/space parity is a Linux extension and is not always exposed by the
-// libc headers.
-#ifndef CMSPAR
+#ifdef __APPLE__
+// macOS has no termios2. A rate outside the B-constant table is set with
+// IOSSIOSPEED instead, which takes the plain integer rate.
+#  include <IOKit/serial/ioss.h>
+#endif
+
+// Mark/space parity is a Linux extension. Other systems have no way to ask
+// for it, so it is reported as unsupported rather than faked: defining the
+// Linux bit value elsewhere would set an unrelated flag in c_cflag.
+#if defined(__linux__) && !defined(CMSPAR)
 #  define CMSPAR 010000000000
+#endif
+
+#if defined(__APPLE__)
+#  define UARTX_OS_NAME "macOS"
+#else
+#  define UARTX_OS_NAME "Linux"
 #endif
 
 namespace serial {
@@ -135,6 +149,14 @@ bool applyCustomBaud(int handle, int baud)
     t2.c_ospeed = static_cast<speed_t>(baud);
     return ::ioctl(handle, TCSETS2, &t2) == 0;
 }
+#elif defined(__APPLE__)
+/// Applies a rate the B-constant table does not cover. Must run after
+/// tcsetattr(): a later tcsetattr() would put the old speed back.
+bool applyCustomBaud(int handle, int baud)
+{
+    speed_t speed = static_cast<speed_t>(baud);
+    return ::ioctl(handle, IOSSIOSPEED, &speed) == 0;
+}
 #endif
 
 int trailingNumber(const std::string &s)
@@ -154,6 +176,29 @@ std::string stem(const std::string &s)
         --i;
     return s.substr(0, i);
 }
+
+#ifdef __APPLE__
+/// macOS creates two nodes per serial device: tty.* waits for carrier detect
+/// on open, cu.* ("call-up") does not. A USB-serial adapter never asserts DCD,
+/// so only the cu.* node is usable for a terminal. The built-in Bluetooth and
+/// debug-console nodes exist on every Mac and are never a target board.
+bool looksLikeMacSerial(const std::string &name)
+{
+    if (name.rfind("cu.", 0) != 0)
+        return false;
+    static const char *ignored[] = {
+        "cu.Bluetooth-Incoming-Port",
+        "cu.debug-console",
+        "cu.wlan-debug",
+    };
+    for (const char *p : ignored) {
+        if (name == p)
+            return false;
+    }
+    return true;
+}
+
+#else
 
 bool pathExists(const std::string &p)
 {
@@ -194,6 +239,8 @@ bool looksLikeSerial(const std::string &name)
     return false;
 }
 
+#endif // __APPLE__
+
 } // namespace
 
 Port::~Port()
@@ -220,11 +267,18 @@ bool Port::open(const Config &cfg, int readTimeoutMs, std::string *error)
         if (error) {
             *error = "could not open " + cfg.port + ": " + errnoText(e);
             if (e == EACCES) {
+#ifdef __APPLE__
+                *error += "\n\nYou do not have permission to use this port. "
+                          "Check that no other program holds it and that the "
+                          "adapter's driver is installed and allowed under "
+                          "System Settings > Privacy & Security.";
+#else
                 *error += "\n\nYou do not have permission to use this port. "
                           "Add your user to the group that owns it (usually "
                           "'dialout' on Debian/Ubuntu, 'uucp' on Arch/Fedora):\n"
                           "    sudo usermod -a -G dialout $USER\n"
                           "then log out and back in.";
+#endif
             } else if (e == EBUSY) {
                 *error += "\n\nAnother program is already using this port.";
             }
@@ -235,6 +289,16 @@ bool Port::open(const Config &cfg, int readTimeoutMs, std::string *error)
     // Ask the kernel to refuse further opens, matching the exclusive access
     // the Windows backend gets from CreateFile with no sharing.
     ::ioctl(handle, TIOCEXCL);
+
+    // TIOCEXCL is not honoured by every driver (macOS ptys and some
+    // third-party USB-serial drivers ignore it), so also take the advisory
+    // lock that other serial tools -- screen, pyserial, minicom -- check.
+    if (::flock(handle, LOCK_EX | LOCK_NB) != 0 && errno == EWOULDBLOCK) {
+        if (error)
+            *error = "could not open " + cfg.port + ": another program is already using this port.";
+        ::close(handle);
+        return false;
+    }
 
     int flags = ::fcntl(handle, F_GETFL, 0);
     ::fcntl(handle, F_SETFL, flags & ~O_NONBLOCK);
@@ -260,22 +324,38 @@ bool Port::open(const Config &cfg, int readTimeoutMs, std::string *error)
     }
 
     // --- parity ---
+#ifdef CMSPAR
     tio.c_cflag &= ~static_cast<tcflag_t>(PARENB | PARODD | CMSPAR);
+#else
+    tio.c_cflag &= ~static_cast<tcflag_t>(PARENB | PARODD);
+#endif
     if (cfg.parity == "Even") {
         tio.c_cflag |= PARENB;
     } else if (cfg.parity == "Odd") {
         tio.c_cflag |= PARENB | PARODD;
-    } else if (cfg.parity == "Mark") {
+    }
+#ifdef CMSPAR
+    else if (cfg.parity == "Mark") {
         tio.c_cflag |= PARENB | CMSPAR | PARODD;
     } else if (cfg.parity == "Space") {
         tio.c_cflag |= PARENB | CMSPAR;
     }
+#else
+    else if (cfg.parity == "Mark" || cfg.parity == "Space") {
+        if (error) {
+            *error = cfg.parity + " parity is not supported on " UARTX_OS_NAME ". "
+                     "Choose None, Even or Odd under Settings > Serial port.";
+        }
+        ::close(handle);
+        return false;
+    }
+#endif
 
     // --- stop bits ---
     if (cfg.stopBits == "1.5") {
         // POSIX has no 1.5-stop-bit setting; only 1 and 2 can be expressed.
         if (error) {
-            *error = "1.5 stop bits is not supported on Linux. "
+            *error = "1.5 stop bits is not supported on " UARTX_OS_NAME ". "
                      "Choose 1 or 2 under Settings > Serial port.";
         }
         ::close(handle);
@@ -326,7 +406,7 @@ bool Port::open(const Config &cfg, int readTimeoutMs, std::string *error)
     }
 
     if (needCustomBaud) {
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
         if (!applyCustomBaud(handle, cfg.baud)) {
             if (error) {
                 *error = "the driver for " + cfg.port + " does not support "
@@ -441,6 +521,20 @@ std::vector<std::string> Port::available()
 {
     std::set<std::string> found;
 
+#ifdef __APPLE__
+    // No /sys on macOS: the serial drivers publish their nodes straight into
+    // /dev as cu.usbserial-*, cu.usbmodem*, cu.SLAB_USBtoUART, cu.wchusbserial*
+    // and so on, so the listing is the source of truth.
+    if (DIR *dir = ::opendir("/dev")) {
+        while (struct dirent *entry = ::readdir(dir)) {
+            const std::string name = entry->d_name;
+            if (looksLikeMacSerial(name))
+                found.insert("/dev/" + name);
+        }
+        ::closedir(dir);
+    }
+#else
+
     // /sys/class/tty lists every tty the kernel knows about, which is the
     // reliable way to tell a real serial device from a console or pty.
     if (DIR *dir = ::opendir("/sys/class/tty")) {
@@ -471,6 +565,7 @@ std::vector<std::string> Port::available()
             ::closedir(dir);
         }
     }
+#endif
 
     std::vector<std::string> ports(found.begin(), found.end());
 

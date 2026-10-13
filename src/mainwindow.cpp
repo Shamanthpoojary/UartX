@@ -309,13 +309,13 @@ void MainWindow::buildRibbon()
 
     auto *rulesBtn = new QPushButton(tr("Color rules..."), rules);
     sizeButton(rulesBtn, 124);
-    rulesBtn->setToolTip(tr("Define keyword colors for incoming lines (Ctrl+R)"));
+    rulesBtn->setToolTip(App::nativeShortcuts(tr("Define keyword colors for incoming lines (Ctrl+R)")));
     connect(rulesBtn, &QPushButton::clicked, this, &MainWindow::openColorRulesDialog);
     g->addWidget(rulesBtn, 0, 0);
 
     auto *filterBtn = new QPushButton(tr("Filter window"), rules);
     sizeButton(filterBtn, 124);
-    filterBtn->setToolTip(tr("Open a window showing only the lines you filter for (Ctrl+F)"));
+    filterBtn->setToolTip(App::nativeShortcuts(tr("Open a window showing only the lines you filter for (Ctrl+F)")));
     connect(filterBtn, &QPushButton::clicked, this, &MainWindow::openFilterWindow);
     g->addWidget(filterBtn, 1, 0);
 

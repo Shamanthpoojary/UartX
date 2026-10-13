@@ -1,6 +1,7 @@
 name: Release
 
-# Builds the Windows and Linux packages and attaches them to a GitHub Release.
+# Builds the Windows, Linux and macOS packages and attaches them to a GitHub
+# Release.
 # Push a tag such as v1.2.0 to publish, or run the workflow by hand to get the
 # artifacts without publishing.
 on:
@@ -13,6 +14,59 @@ permissions:
   contents: write
 
 jobs:
+  macos:
+    name: macOS (universal)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pinned rather than tracking latest: the .dmg bundles this Qt. The
+      # official build is universal, which is what makes one .dmg serve both
+      # Intel and Apple Silicon Macs. 6.8 runs on macOS 12 and newer.
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          host: 'mac'
+          target: 'desktop'
+          arch: 'clang_64'
+          cache: true
+
+      - name: Install Ninja
+        run: brew install ninja || true
+
+      - name: Configure
+        run: cmake -S . -B build/macos -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build/macos --parallel
+
+      # make-dmg.sh fails the build if the bundle still links a Qt outside
+      # itself, so a .dmg that only works on the build machine never ships.
+      - name: Build the disk image
+        run: cmake --build build/macos --target dmg
+
+      - name: Collect artifacts and checksums
+        run: |
+          mkdir -p dist
+          cp build/macos/UartX-*-macos.dmg dist/
+          lipo -archs build/macos/dmg-stage/UartX.app/Contents/MacOS/UartX
+          ( cd dist && shasum -a 256 * > SHA256SUMS-macos.txt )
+          ls -la dist
+          cat dist/SHA256SUMS-macos.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: uartx-macos
+          path: dist/*
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          fail_on_unmatched_files: true
+
   linux:
     name: Linux (Ubuntu 22.04)
     runs-on: ubuntu-22.04

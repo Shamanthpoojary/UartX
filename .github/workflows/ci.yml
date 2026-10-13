@@ -1,6 +1,6 @@
 name: CI
 
-# Proves that main and every pull request still build on both platforms.
+# Proves that main and every pull request still build on every platform.
 # Packaging is not run here -- that is the Release workflow's job.
 on:
   push:
@@ -65,3 +65,35 @@ jobs:
           $exe = "build/UartX.exe"
           if (-not (Test-Path $exe)) { throw "$exe was not built" }
           Get-Item $exe | Format-List Name, Length, VersionInfo
+
+  macos:
+    name: Build (macOS)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      # The official Qt build is universal, so the app it links is too.
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          host: 'mac'
+          target: 'desktop'
+          arch: 'clang_64'
+          cache: true
+
+      - name: Install Ninja
+        run: brew install ninja || true
+
+      - name: Configure
+        run: cmake -S . -B build/macos -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build/macos --parallel
+
+      - name: Check the bundle is universal
+        run: |
+          bin=build/macos/UartX.app/Contents/MacOS/UartX
+          test -x "$bin" || { echo "$bin was not built"; exit 1; }
+          lipo -archs "$bin"
+          lipo -archs "$bin" | grep -q x86_64 && lipo -archs "$bin" | grep -q arm64

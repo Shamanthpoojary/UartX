@@ -10,10 +10,11 @@
 
 /// Live enumeration of the machine's serial ports.
 /// Windows: COM1, COM3, ...   Linux: /dev/ttyUSB0, /dev/ttyACM0, ...
+/// macOS: /dev/cu.usbserial-*, /dev/cu.usbmodem*, ...
 QStringList availableSerialPorts();
 
 /// A short label for a port, for lists and status text: unchanged on Windows,
-/// without the "/dev/" prefix on Linux.
+/// without the "/dev/" prefix on Linux and macOS.
 QString serialPortDisplayName(const QString &port);
 
 /// Reader/writer thread. Entirely platform-independent: the operating-system

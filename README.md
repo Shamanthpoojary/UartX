@@ -10,7 +10,7 @@
 [![Release](https://img.shields.io/github/v/release/Shamanthpoojary/UartX?sort=semver)](https://github.com/Shamanthpoojary/UartX/releases/latest)
 [![CI](https://github.com/Shamanthpoojary/UartX/actions/workflows/ci.yml/badge.svg)](https://github.com/Shamanthpoojary/UartX/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Platform: Windows and Linux](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey)
+![Platform: Windows, macOS and Linux](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 
 UartX is a UART-based debugging and analysis tool built specifically for
 embedded and firmware developers.
@@ -89,9 +89,10 @@ Everything comes from one place:
 | --- | --- | --- |
 | **Windows** — normal install | `UartX-<version>-setup.exe` | Run it. Installs per-user, no admin needed. |
 | **Windows** — nothing installed | `UartX-<version>-portable-win64.zip` | Unzip anywhere, run `UartX.exe`. |
+| **macOS** — Intel or Apple Silicon | `UartX-<version>-macos.dmg` | Open it, drag **UartX** onto **Applications**. |
 | **Linux** — any distribution | `UartX-<version>-x86_64.AppImage` | `chmod +x`, then run it. Bundles Qt, needs no root. |
 | **Linux** — Debian / Ubuntu / Mint / Raspberry Pi OS | `uartx_<version>_amd64.deb` | `sudo apt install ./uartx_*.deb` |
-| Verifying a download | `SHA256SUMS-windows.txt` / `SHA256SUMS-linux.txt` | See [Verifying a download](#verifying-a-download). |
+| Verifying a download | `SHA256SUMS-windows.txt` / `SHA256SUMS-macos.txt` / `SHA256SUMS-linux.txt` | See [Verifying a download](#verifying-a-download). |
 
 Everything else in Assets is either a checksum file or the plain tarball under
 [Other downloads](#other-downloads).
@@ -119,6 +120,41 @@ Both carry their own Qt runtime.
 > FTDI adapters usually install themselves over Windows Update; CH340/CH341
 > clones normally need their driver installed by hand.
 
+### macOS
+
+**`UartX-<version>-macos.dmg`** — one universal app that runs natively on both
+Intel and Apple Silicon (M1/M2/M3/M4) Macs, on **macOS 12 Monterey or newer**.
+It carries its own Qt runtime.
+
+1. Open the `.dmg`.
+2. Drag **UartX** onto the **Applications** shortcut beside it.
+3. Eject the disk image and start UartX from Launchpad, Spotlight or
+   *Applications*.
+
+> **"UartX can't be opened" / "Apple could not verify…" on first launch.** The
+> app is not notarized by Apple, so Gatekeeper stops it the first time.
+> Choose **Done**, then open **System Settings → Privacy & Security**, scroll
+> down to *"UartX was blocked…"* and click **Open Anyway**. (On macOS 14 and
+> older, right-click UartX in Applications → **Open** → **Open** also works.)
+> You only do this once. From Terminal, the equivalent is:
+>
+> ```bash
+> xattr -dr com.apple.quarantine /Applications/UartX.app
+> ```
+
+> **Which port is my board?** Ports are listed as `cu.usbserial-…`,
+> `cu.usbmodem…`, `cu.SLAB_USBtoUART`, `cu.wchusbserial…` and so on. FTDI,
+> CP210x and CDC-ACM (Arduino, ST-Link, ESP32-S2/S3/C3 USB) adapters work with
+> the drivers built into macOS. Older CH340/CH341 boards may need
+> [WCH's driver](https://www.wch-ic.com/downloads/CH34XSER_MAC_ZIP.html);
+> after installing it, allow it under **System Settings → Privacy & Security**.
+> No group membership or `sudo` is needed.
+
+> **Serial settings on macOS.** Everything works as on Linux, including
+> non-standard baud rates such as 460800, 921600, 1500000 and 2000000 (when
+> the adapter's driver supports them). *Mark* and *Space* parity and 1.5 stop
+> bits have no macOS API and are refused with a clear message.
+
 ### Linux
 
 **Recommended — `UartX-<version>-x86_64.AppImage`**
@@ -127,8 +163,8 @@ Both carry their own Qt runtime.
 
 ```bash
 cd ~/Downloads
-chmod +x UartX-1.2.0-x86_64.AppImage
-./UartX-1.2.0-x86_64.AppImage
+chmod +x UartX-1.3.0-x86_64.AppImage
+./UartX-1.3.0-x86_64.AppImage
 ```
 
 **Debian, Ubuntu, Mint, Raspberry Pi OS — `uartx_<version>_amd64.deb`**
@@ -137,8 +173,8 @@ A proper package: menu entry, icon, and your distribution's Qt rather than a
 bundled copy.
 
 ```bash
-cp uartx_1.2.0_amd64.deb /tmp/
-sudo apt install /tmp/uartx_1.2.0_amd64.deb
+cp uartx_1.3.0_amd64.deb /tmp/
+sudo apt install /tmp/uartx_1.3.0_amd64.deb
 ```
 
 Then launch **UartX** from the applications menu, or run `UartX` (capital U
@@ -182,15 +218,16 @@ error dialog if you hit it.
 
 ### Verifying a download
 
-Each platform's assets ship with a checksum file — `SHA256SUMS-windows.txt` or
-`SHA256SUMS-linux.txt`:
+Each platform's assets ship with a checksum file — `SHA256SUMS-windows.txt`,
+`SHA256SUMS-macos.txt` or `SHA256SUMS-linux.txt`:
 
 ```bash
 sha256sum -c SHA256SUMS-linux.txt        # Linux
+shasum -a 256 -c SHA256SUMS-macos.txt    # macOS
 ```
 
 ```powershell
-Get-FileHash UartX-1.2.0-setup.exe -Algorithm SHA256    # Windows
+Get-FileHash UartX-1.3.0-setup.exe -Algorithm SHA256    # Windows
 ```
 
 ## Quick start
@@ -198,9 +235,9 @@ Get-FileHash UartX-1.2.0-setup.exe -Algorithm SHA256    # Windows
 1. Pick the **Port** and **Baud** rate in the ribbon — **Refresh** re-scans
    after you plug a device in.
 2. Press **Connect** (**F2**). Traffic appears live.
-3. Open *Tools > Color rules* (**Ctrl+R**) and add a rule: a name, a keyword
-   your firmware prints, and a colour.
-4. Open *Tools > New filter window* (**Ctrl+F**) and tick that rule. You are now
+3. Open *Tools > Color rules* (**Ctrl+R**, **⌘R** on a Mac) and add a rule: a
+   name, a keyword your firmware prints, and a colour.
+4. Open *Tools > New filter window* (**Ctrl+F**, **⌘F** on a Mac) and tick that rule. You are now
    watching only those lines, while the full log keeps running behind it.
 
 Full walkthrough: **[docs/USAGE.md](docs/USAGE.md)**.
@@ -271,6 +308,16 @@ scripts/build_release.sh            # or -p deb / -p tgz / -p appimage
 ./build/linux/UartX
 ```
 
+**macOS** (Xcode command-line tools, CMake and Qt 6 — see
+[docs/BUILDING.md](docs/BUILDING.md#macos)):
+
+```bash
+git clone https://github.com/Shamanthpoojary/UartX.git
+cd UartX
+scripts/build_macos.sh -p dmg       # build/macos/UartX-<ver>-macos.dmg
+open build/macos/UartX.app
+```
+
 **Windows:**
 
 ```
@@ -287,17 +334,20 @@ distributions' package names.
 
 ```
 src/                  application sources and headers
-resources/            uartx.ico, the Windows resource template, and icons/
-scripts/              release build script and icon generator
+resources/            uartx.ico, uartx.icns, the Windows resource template, and icons/
+scripts/              release build scripts and icon generator
 packaging/windows/    Inno Setup template
+packaging/macos/      app bundle Info.plist and the .dmg builder
+packaging/linux/      desktop entry, AppStream metadata, AppImage script
 docs/                 usage and build documentation
 .github/workflows/    CI and release automation
 ```
 
 The serial port is reached through `src/serialport.h`, a deliberately Qt-free
 platform interface, with one backend per platform —
-`src/serialport_win.cpp` (Win32) and `src/serialport_posix.cpp` (termios).
-Everything above that line is shared between both, unmodified, so supporting
+`src/serialport_win.cpp` (Win32) and `src/serialport_posix.cpp` (termios,
+shared by Linux and macOS). Everything above that line is shared by every
+platform, unmodified, so supporting
 another operating system means adding one more backend `.cpp` and nothing else.
 
 ## Support and contact

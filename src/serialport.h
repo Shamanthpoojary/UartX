@@ -14,12 +14,12 @@
 ///
 /// Implementations:
 ///   serialport_win.cpp    Win32  (CreateFile / DCB / COMMTIMEOUTS)
-///   serialport_posix.cpp  POSIX  (open / termios), used on Linux
+///   serialport_posix.cpp  POSIX  (open / termios), used on Linux and macOS
 namespace serial {
 
 struct Config
 {
-    std::string port;                  ///< "COM5" or "/dev/ttyUSB0"
+    std::string port;                  ///< "COM5", "/dev/ttyUSB0" or "/dev/cu.usbserial-110"
     int         baud     = 115200;
     int         dataBits = 8;          ///< 5..8
     std::string parity   = "None";     ///< None / Even / Odd / Mark / Space
@@ -53,10 +53,11 @@ public:
 
     /// Every serial port present on the machine, in a natural order.
     /// Windows: COM1, COM2, ... Linux: /dev/ttyUSB0, /dev/ttyACM0, ...
+    /// macOS: /dev/cu.usbserial-*, /dev/cu.usbmodem*, ...
     static std::vector<std::string> available();
 
     /// A short, human-readable name for a port, for use in lists.
-    /// Windows returns the port unchanged; Linux strips the "/dev/" prefix.
+    /// Windows returns the port unchanged; Linux and macOS strip "/dev/".
     static std::string displayName(const std::string &port);
 
 private:

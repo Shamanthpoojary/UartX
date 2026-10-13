@@ -327,6 +327,7 @@ void FilterWindow::refreshSources(const ColorRuleSet &rules, const TextFilterSet
     if (rules.isEmpty()) {
         m_ruleHint = new QLabel(tr("No color rules defined.\nAdd them under Tools > Color rules."));
         m_ruleHint->setStyleSheet(QStringLiteral("color: #8a8a8a;"));
+        m_ruleHint->setWordWrap(true);
         m_ruleLayout->insertWidget(m_ruleLayout->count() - 1, m_ruleHint);
     }
     for (const ColorRule &r : rules.rules) {
@@ -346,9 +347,13 @@ void FilterWindow::refreshSources(const ColorRuleSet &rules, const TextFilterSet
 
     // --- text filters ---
     if (filters.isEmpty()) {
-        m_filterHint = new QLabel(tr("No text filters yet.\nChoose Add... to create one,\n"
+        m_filterHint = new QLabel(tr("No text filters yet.\nChoose Add... to create one, "
                                      "for example lines containing \"/6/\"."));
         m_filterHint->setStyleSheet(QStringLiteral("color: #8a8a8a;"));
+        // Wrapped rather than hard-broken: the pane's width depends on the
+        // dock split and on the platform font (macOS's is wider), and a
+        // fixed-width hint grew a horizontal scroll bar when it did not fit.
+        m_filterHint->setWordWrap(true);
         m_filterLayout->insertWidget(m_filterLayout->count() - 1, m_filterHint);
     }
     for (const TextFilter &f : filters.filters) {

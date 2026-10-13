@@ -1,5 +1,15 @@
 cmake_minimum_required(VERSION 3.19)
-project(UartX VERSION 1.2.0 LANGUAGES CXX)
+
+# macOS: one universal binary that runs natively on both Intel and Apple
+# Silicon, and the oldest release the bundled Qt supports (Qt 6.8 needs 12).
+# Both have to be set before project() so the compiler checks see them; a
+# value given on the command line still wins.
+if(APPLE)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "Minimum macOS version")
+    set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE STRING "macOS architectures")
+endif()
+
+project(UartX VERSION 1.3.0 LANGUAGES CXX)
 
 # Qt 6.2 is the floor so the Qt versions bundled with current LTS toolchains
 # work unchanged (Ubuntu 22.04 ships 6.2; Debian 12 and Ubuntu 24.04 ship 6.4).
@@ -36,13 +46,14 @@ set(APP_PUBLISHER   "${APP_COMPANY}")
 set(APP_SUPPORT     "shamanth25402@gmail.com")
 set(APP_HOMEPAGE    "https://github.com/Shamanthpoojary/UartX")
 set(APP_DESKTOP_ID  "uartx")
+set(APP_BUNDLE_ID   "com.shamanth.uartx")
 
 # ---------------------------------------------------------------------------
 # Sources
 #
 # Everything is platform-independent except the serial backend: the operating
 # system differences are confined to src/serialport_{win,posix}.cpp behind the
-# src/serialport.h interface.
+# src/serialport.h interface. Linux and macOS share the POSIX backend.
 # ---------------------------------------------------------------------------
 
 set(UARTX_SOURCES
@@ -71,8 +82,9 @@ else()
 endif()
 
 # WIN32 selects the GUI subsystem on Windows, so launching the app never opens
-# a console window alongside it. It is ignored on other platforms.
-qt_add_executable(UartX WIN32 ${UARTX_SOURCES})
+# a console window alongside it. MACOSX_BUNDLE builds UartX.app on macOS.
+# Each is ignored on the other platforms.
+qt_add_executable(UartX WIN32 MACOSX_BUNDLE ${UARTX_SOURCES})
 
 target_include_directories(UartX PRIVATE src)
 
@@ -108,6 +120,24 @@ if(WIN32)
     target_sources(UartX PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/app.rc")
 endif()
 
+# --- macOS: bundle identity, icon and Info.plist
+if(APPLE)
+    set(MACOS_ICON "${CMAKE_CURRENT_SOURCE_DIR}/resources/uartx.icns")
+    target_sources(UartX PRIVATE "${MACOS_ICON}")
+    set_source_files_properties("${MACOS_ICON}" PROPERTIES
+        MACOSX_PACKAGE_LOCATION "Resources")
+    set_target_properties(UartX PROPERTIES
+        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/packaging/macos/Info.plist.in"
+        MACOSX_BUNDLE_BUNDLE_NAME "${APP_PRODUCT}"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "${APP_BUNDLE_ID}"
+        MACOSX_BUNDLE_ICON_FILE "uartx.icns"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
+        MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
+        MACOSX_BUNDLE_INFO_STRING "${APP_PRODUCT} ${PROJECT_VERSION}"
+        MACOSX_BUNDLE_COPYRIGHT "${APP_COPYRIGHT}"
+    )
+endif()
+
 # ---------------------------------------------------------------------------
 # Installation
 # ---------------------------------------------------------------------------
@@ -123,6 +153,7 @@ endif()
 
 install(TARGETS UartX
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    BUNDLE  DESTINATION .
 )
 
 if(MINGW)
@@ -154,11 +185,11 @@ if(MINGW)
     endif()
 endif()
 
-if(WIN32)
-    # windeployqt copies the Qt runtime next to the executable so the result is
-    # self-contained and needs no Qt installation on the target machine. On
-    # Linux the packages depend on the distribution's Qt instead, and the
-    # AppImage script does its own bundling.
+if(WIN32 OR APPLE)
+    # windeployqt (Windows) and macdeployqt (macOS) copy the Qt runtime into
+    # the package so the result is self-contained and needs no Qt installation
+    # on the target machine. On Linux the packages depend on the distribution's
+    # Qt instead, and the AppImage script does its own bundling.
     if(COMMAND qt_generate_deploy_app_script)
         qt_generate_deploy_app_script(
             TARGET UartX
@@ -170,10 +201,14 @@ if(WIN32)
         # too late. Without this windeployqt drops the Qt DLLs into bin/ while
         # the exe sits at the prefix root, and the installed app cannot resolve
         # Qt6Widgets.dll.
-        install(CODE "set(QT_DEPLOY_BIN_DIR \".\")")
+        if(WIN32)
+            install(CODE "set(QT_DEPLOY_BIN_DIR \".\")")
+        endif()
         install(SCRIPT ${deploy_script})
     endif()
-else()
+endif()
+
+if(NOT WIN32 AND NOT APPLE)
     # --- Linux desktop integration -----------------------------------------
     configure_file(packaging/linux/uartx.desktop.in
                    "${CMAKE_CURRENT_BINARY_DIR}/${APP_DESKTOP_ID}.desktop" @ONLY)
@@ -250,6 +285,16 @@ if(WIN32)
                 --format=zip .
         DEPENDS UartX
         COMMENT "Building the portable zip"
+        VERBATIM
+    )
+elseif(APPLE)
+    # --- Disk image:  cmake --build <dir> --target dmg
+    # Stages the bundle through the install step (which runs macdeployqt),
+    # signs it and wraps it in a drag-to-Applications .dmg.
+    add_custom_target(dmg
+        COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/packaging/macos/make-dmg.sh" "${CMAKE_BINARY_DIR}"
+        DEPENDS UartX
+        COMMENT "Building UartX-${PROJECT_VERSION}-macos.dmg"
         VERBATIM
     )
 else()

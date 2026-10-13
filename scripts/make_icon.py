@@ -7,6 +7,8 @@ Reads resources/logo/uartx-512-{white,black}.png -- the same artwork in two
 inks on a transparent background -- and writes:
 
     resources/uartx.ico              app icon, white logo on a dark plate
+    resources/uartx.icns             the same icon for the macOS app bundle,
+                                     padded to Apple's icon grid
     resources/icons/uartx_<N>.png    the same icon at each size, for Qt and
                                      for the Linux icon theme
     resources/icons/uartx_logo.png   white on transparent, no plate: this one
@@ -85,6 +87,21 @@ def make_app_icon(master, size):
     return canvas
 
 
+# macOS draws every app icon on the same grid: an 824px body centred in a
+# 1024px canvas, leaving the margin the Dock's shadow and hover zoom expect.
+# An icon that fills the whole square looks oversized beside every other app.
+MAC_BODY = 824 / 1024
+
+
+def make_mac_icon(master, size):
+    """The app icon padded to the macOS icon grid."""
+    canvas = Image.new("RGBA", (size, size), TRANSPARENT)
+    body = make_app_icon(master, max(16, round(size * MAC_BODY)))
+    canvas.alpha_composite(body, ((size - body.size[0]) // 2,
+                                  (size - body.size[1]) // 2))
+    return canvas
+
+
 def make_flat(master, size):
     """The artwork alone on transparency, trimmed and squared.
 
@@ -138,6 +155,14 @@ def main():
     frames[-1].save(ico_path, format="ICO", sizes=[(s, s) for s in sizes],
                     append_images=frames[:-1])
     print("wrote", ico_path)
+
+    # Pillow writes every ICNS slot from the frames it is given, scaling the
+    # nearest one for any size not supplied.
+    mac_sizes = [16, 32, 64, 128, 256, 512, 1024]
+    mac_frames = [make_mac_icon(white, s) for s in mac_sizes]
+    icns_path = os.path.join(RESOURCES, "uartx.icns")
+    mac_frames[-1].save(icns_path, format="ICNS", append_images=mac_frames[:-1])
+    print("wrote", icns_path)
 
     # PNG copies of every frame. Qt loads these without needing the ICO image
     # plugin, which is not always deployed, and the Linux icon theme wants PNGs.

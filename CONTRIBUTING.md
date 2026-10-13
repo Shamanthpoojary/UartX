@@ -21,10 +21,11 @@ instructions, including the one-shot release script, are in
 git clone https://github.com/Shamanthpoojary/UartX.git
 cd UartX
 scripts/build_release.sh            # Linux
+scripts/build_macos.sh              # macOS
 scripts\build_release.bat           # Windows
 ```
 
-Keep the two build trees separate — `build/linux` and `build/windows`, which is
+Keep the build trees separate — `build/linux`, `build/macos` and `build/windows`, which is
 what the scripts already do. A CMake build directory records the source path
 and toolchain that made it, so pointing WSL at a tree a Windows build created
 fails to configure.
@@ -34,9 +35,10 @@ fails to configure.
 | Directory | Contents |
 | --- | --- |
 | `src/` | all application sources and headers |
-| `resources/` | `uartx.ico`, the Windows resource template, and `icons/` |
-| `scripts/` | the two release build scripts and the icon generator |
+| `resources/` | `uartx.ico`, `uartx.icns`, the Windows resource template, and `icons/` |
+| `scripts/` | the release build scripts and the icon generator |
 | `packaging/windows/` | the Inno Setup template |
+| `packaging/macos/` | app-bundle Info.plist and the `.dmg` builder |
 | `packaging/linux/` | desktop entry, AppStream metadata, AppImage script |
 | `docs/` | usage and build documentation |
 | `.github/workflows/` | CI and release automation |
