@@ -166,6 +166,7 @@ private:
     bool writeAgentReport(const QString &path, QString *error) const;
     void showDockPanel();
     void hideDockPanelIfEmpty();
+    void applyDockSize();
 
     void updateStatusLine();
     void showTemporaryNotice(const QString &message);
@@ -208,6 +209,8 @@ private:
     /// docked filter view, as tabs.
     QTabWidget *m_dockTabs = nullptr;
     AgentPanel *m_agentPanel = nullptr;
+    bool        m_dockSizePending = false;
+    bool        m_dockUserSized   = false;   ///< the user dragged the divider
     QString     m_agentName;            ///< empty until an agent is in control
 
     // ---- widgets ----

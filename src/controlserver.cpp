@@ -211,9 +211,12 @@ void ControlServer::stop()
             QFile::remove(runtimeFilePath());
         }
     }
-    for (auto it = m_clients.begin(); it != m_clients.end(); ++it)
+    for (auto it = m_clients.begin(); it != m_clients.end(); ++it) {
+        it.key()->flush();
         it.key()->disconnectFromServer();
+    }
     m_clients.clear();
+    m_stopped.store(true);
 }
 
 void ControlServer::onNewConnection()
