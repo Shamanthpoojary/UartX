@@ -6,6 +6,7 @@
 #include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QDateTime>
+#include <QDeadlineTimer>
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFile>
