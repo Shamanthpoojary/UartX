@@ -267,6 +267,60 @@ log-saving setup, colour rules and filters.
 Your current settings are also saved automatically and restored next time
 UartX starts, whether or not they belong to a named configuration.
 
+## 8. Debug with Claude Code (Windows)
+
+> Windows only. The AI features come with the Windows installer.
+
+Claude Code can watch a board through UartX without ever reading the whole
+log. It asks UartX for specific lines, UartX filters the live stream and sends
+back a small numbered excerpt, and everything Claude did is shown to you
+inside UartX.
+
+**Setup.** Run `UartX-<version>-setup.exe` and keep both *AI agent support*
+options ticked. One adds `uartx-ctl` to PATH. The other installs the UartX skill
+to `%USERPROFILE%\.claude\skills\uartx`. Then ask Claude Code about your board
+in your own words. The skill tells it how to drive UartX.
+
+**Who is in control.** UartX's AI features are active only when Claude opened
+it (`uartx-ctl launch`). A UartX you start yourself is a plain logger, and
+every request from Claude is refused with `AGENT_OFF` until Claude takes it
+over. Taking over an open UartX is visible to you. When Claude is in control:
+
+- The title bar reads *UartX - under Claude's control*.
+- The side panel gains a **Claude — findings** tab:
+  - **Findings**: Claude's explanation, in plain words, with line numbers
+    (`#30`) that refer to lines in the session.
+  - **What Claude looked at**: every request, with Claude's reason for it.
+  - **Lines Claude was sent**: select a request to see exactly which lines it
+    returned.
+  - **Save report...**: writes all of it to a Markdown file.
+    `claude-report.md` is also saved in the session folder when the session
+    ends.
+- Views Claude opens appear as **AI ·** tabs. They work like your own filter
+  views and can be popped out or closed.
+
+**Limits.** Each reply is capped at 200 lines of 300 characters. Claude
+reads the device's output but cannot send anything to it. The connection is a
+local named pipe that only your user account can open, and it never touches
+the network.
+
+**Commands** (what Claude runs; useful for scripting too):
+
+| Command | Does |
+| --- | --- |
+| `uartx-ctl launch` | Start UartX under agent control, or take over the open one |
+| `uartx-ctl open COM7 --baud 921600` | Connect a port (`--force` replaces an open session) |
+| `uartx-ctl status` / `summary` | Session state; counts of each kind of line, no text |
+| `uartx-ctl search P` / `tail` | Matching lines with context; the newest lines |
+| `uartx-ctl wait P --timeout 30s` | Block until a new line matches, then return that moment |
+| `uartx-ctl filter add NAME P` | Open an AI view showing only lines matching `P` |
+| `uartx-ctl note TEXT` | Add a finding to the Claude tab |
+| `uartx-ctl close` | Disconnect the port |
+
+Patterns are literal and case-insensitive; add `--regex` and/or `--case`.
+`--why "..."` gives the reason the user sees for each request. Run
+`uartx-ctl --help` for every option and exit code.
+
 ## Configuration file
 
 Everything the user can change is stored in one file and reloaded at startup:

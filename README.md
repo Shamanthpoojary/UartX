@@ -17,6 +17,10 @@ embedded and firmware developers.
 
 ### **[⬇ Download the latest release](https://github.com/Shamanthpoojary/UartX/releases/latest)** &nbsp;·&nbsp; [which file do I need?](#which-file-do-i-need)
 
+> **New in 1.4 — debug with Claude Code (Windows only).** Claude asks UartX for
+> just the lines it needs, and UartX shows you, in plain words, what Claude
+> looked at and what it found. [See how it works ↓](#debug-with-claude-code-windows-only)
+
 ## Sound familiar?
 
 Your board is printing at 115200 baud. Six tasks, all logging, all interleaved.
@@ -73,6 +77,96 @@ device sent and nothing else: no timestamps, no direction markers, no hex
 formatting, no colours. Filters, highlighting and display options never touch
 it. What lands on disk is what came off the wire.
 
+## Debug with Claude Code (Windows only)
+
+> **The AI features are available on Windows only.** The 1.4 Windows installer
+> adds them. The macOS and Linux packages give you everything else on this page,
+> without the Claude integration.
+
+A UART log can run to thousands of lines. Pasting it into an AI is slow, costly,
+and hides the one line that matters under everything else. And if the AI then
+tells you "the network is failing", how do you check that without reading the
+log yourself?
+
+UartX solves both. **Claude Code never reads the log.** It tells UartX what it is
+looking for, and UartX filters the live stream itself and sends back only the
+matching lines, capped and numbered. Everything Claude asked, every line it
+was sent, and everything it concluded is shown to you inside UartX, in plain
+language.
+
+### Claude only gets the lines it asks for
+
+![Claude Code asking UartX for specific lines with uartx-ctl](docs/Images/AI/08-claude-code-commands.png)
+
+*What Claude Code runs. A summary returns counts only, with no log text. A
+search returns just the matching lines. Each request says **why** it is being
+made, and you see that reason in UartX too.*
+
+In the session shown here, the board printed 196 lines and Claude was sent
+about 30 of them. UartX keeps the full log on disk the whole time, byte for
+byte, so nothing is lost by asking narrowly.
+
+### You can see what Claude found, and check it
+
+![The Claude tab in UartX: findings, every request, and the exact lines sent](docs/Images/AI/01-claude-findings.png)
+
+*The **Claude** tab beside the live terminal. **Findings** explain the log in
+plain words, with line numbers (#30, #34…) you can check. **What Claude looked
+at** lists every request in order, with its reason.*
+
+![Selecting a request shows exactly which lines Claude received](docs/Images/AI/07-claude-evidence-broken-lines.png)
+
+*Click any request and the bottom pane shows the exact lines Claude was sent
+for it, so you can see what each conclusion was based on. Here, lines #18–#19
+show two firmware tasks printing over each other.*
+
+When the session ends, all of this is saved as `claude-report.md` in the
+session's log folder, so you can read it later or attach it to a bug report.
+
+### Views that turn a pattern into a short list
+
+Claude can open filtered views in UartX to make a pattern visible. Each view
+is labelled **AI**, says which lines it matches, and keeps following the live
+stream. The views share the side panel, which starts at a quarter of the
+window; drag the divider to resize it, or pop a view out into its own window.
+
+| | |
+| --- | --- |
+| ![AI view: network connection attempts](docs/Images/AI/02-ai-view-network.png) | ![AI view: every error and warning](docs/Images/AI/03-ai-view-errors-warnings.png) |
+| **Network:** fails, fails, connects, every cycle. In a scrolling terminal this repeats once every 20 seconds and is easy to miss. | **Errors and warnings:** every one in one place, pulled out of the live stream. |
+| ![AI view: memory dips and recoveries](docs/Images/AI/04-ai-view-memory.png) | ![AI view: lines printed over each other](docs/Images/AI/05-ai-view-broken-lines.png) |
+| **Memory:** free heap drops to 38 KiB and comes back. A dip, not a leak. | **Broken lines:** two tasks printing at once. This is a logging bug, not corrupted data. |
+
+![AI view: boot steps with timing](docs/Images/AI/06-ai-view-boot-steps.png)
+
+*Boot steps: the start-up sequence and how long it takes, at a glance.*
+
+### You stay in control
+
+- **Claude's features are off unless Claude opens UartX.** If you start UartX
+  yourself, it is a plain UART logger: no Claude tab, and Claude's requests
+  are refused.
+- When Claude starts UartX (`uartx-ctl launch`), the title bar reads
+  *"UartX - under Claude's control"*. If you already have UartX open, Claude
+  takes over that window, and the change is shown to you.
+- Claude reaches UartX only through a local pipe on your own PC that only your
+  user account can open. Nothing is sent over the network.
+- Claude reads the device's output but sends it nothing. There is no way for it
+  to type into your board.
+
+### Setting it up
+
+1. Install UartX with `UartX-1.4.0-setup.exe` and keep both options under
+   *AI agent support* ticked: **Add uartx-ctl to PATH** and **Install the
+   UartX skill for Claude Code**.
+2. Connect your board, open Claude Code, and ask in your own words, for
+   example *"COM7 at 921600: watch the boot and tell me what's wrong."*
+   The skill tells Claude how to drive UartX. You don't need to learn any
+   commands.
+
+Command reference: run `uartx-ctl --help`, or see
+[docs/USAGE.md](docs/USAGE.md#8-debug-with-claude-code-windows).
+
 ## Install
 
 Everything comes from one place:
@@ -87,7 +181,7 @@ Everything comes from one place:
 
 | You are on | Take this | Then |
 | --- | --- | --- |
-| **Windows** — normal install | `UartX-<version>-setup.exe` | Run it. Installs per-user, no admin needed. |
+| **Windows** — normal install | `UartX-<version>-setup.exe` | Run it. Installs per-user, no admin needed. Includes the [Claude Code integration](#debug-with-claude-code-windows-only). |
 | **Windows** — nothing installed | `UartX-<version>-portable-win64.zip` | Unzip anywhere, run `UartX.exe`. |
 | **macOS** — Intel or Apple Silicon | `UartX-<version>-macos.dmg` | Open it, drag **UartX** onto **Applications**. |
 | **Linux** — any distribution | `UartX-<version>-x86_64.AppImage` | `chmod +x`, then run it. Bundles Qt, needs no root. |
@@ -107,7 +201,10 @@ uses your distribution's.
 | `UartX-<version>-setup.exe` | Normal install. Start Menu entry, optional desktop shortcut, proper uninstaller. No administrator rights required. |
 | `UartX-<version>-portable-win64.zip` | You would rather not install anything. Unzip and run `UartX.exe`. |
 
-Both carry their own Qt runtime.
+Both carry their own Qt runtime. Both also contain `uartx-ctl.exe`, the
+command Claude Code uses to talk to UartX. Only the setup file adds it to PATH
+and installs the Claude Code skill, so use the setup file if you want the
+[AI features](#debug-with-claude-code-windows-only).
 
 > **SmartScreen warning.** The installer is not code-signed, so Windows shows
 > "Windows protected your PC" the first time it runs on a machine.
@@ -227,7 +324,7 @@ shasum -a 256 -c SHA256SUMS-macos.txt    # macOS
 ```
 
 ```powershell
-Get-FileHash UartX-1.3.0-setup.exe -Algorithm SHA256    # Windows
+Get-FileHash UartX-1.4.0-setup.exe -Algorithm SHA256    # Windows
 ```
 
 ## Quick start
@@ -334,6 +431,9 @@ distributions' package names.
 
 ```
 src/                  application sources and headers
+tools/uartx-ctl/      the command Claude Code uses to ask UartX for lines
+skills/uartx/         the Claude Code skill the Windows installer adds
+tests/                Qt Test suites, run by CI
 resources/            uartx.ico, uartx.icns, the Windows resource template, and icons/
 scripts/              release build scripts and icon generator
 packaging/windows/    Inno Setup template
