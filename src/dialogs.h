@@ -63,7 +63,6 @@ private:
     QCheckBox   *m_enable;
     QLineEdit   *m_folder;
     QLineEdit   *m_template;
-    QCheckBox   *m_append;
     QPushButton *m_browse;
     QWidget     *m_detail;
     QLabel      *m_status;

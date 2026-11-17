@@ -45,7 +45,11 @@ public:
     void stop();
 
 signals:
-    void dataReceived(const QByteArray &data);
+    /// `wallMs` is the host clock and `monoNs` the steady clock, both read as
+    /// the chunk came out of the driver -- the closest to the wire UartX can
+    /// see. Every line in the chunk carries this time; USB serial adapters
+    /// deliver in packets, so it is accurate to the packet, not the byte.
+    void dataReceived(const QByteArray &data, qint64 wallMs, qint64 monoNs);
     void statusChanged(const QString &status);
     void fatalError(const QString &message);
 

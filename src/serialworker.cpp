@@ -1,6 +1,9 @@
 #include "serialworker.h"
 #include "serialport.h"
 
+#include <QDateTime>
+#include <chrono>
+
 namespace {
 
 constexpr int READ_TIMEOUT_MS = 50;    // how long a read waits on an idle line
@@ -109,8 +112,13 @@ void SerialWorker::run()
             continue;
         }
 
-        if (got > 0)
-            emit dataReceived(QByteArray(chunk.constData(), got));
+        if (got > 0) {
+            const qint64 mono = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                    std::chrono::steady_clock::now().time_since_epoch())
+                                    .count();
+            emit dataReceived(QByteArray(chunk.constData(), got),
+                              QDateTime::currentMSecsSinceEpoch(), mono);
+        }
 
         QByteArray pending;
         {

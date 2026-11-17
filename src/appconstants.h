@@ -118,6 +118,12 @@ inline QString displayPath(const QString &path)
 inline const QString TERM_BG        = QStringLiteral("#0c0c0c");
 inline const QString TERM_FG        = QStringLiteral("#cccccc");
 inline const QString TERM_SYSMSG    = QStringLiteral("#5c6370");
+// A display gap or a log warning: something the user should notice, but not
+// an error in the data.
+inline const QString TERM_WARN      = QStringLiteral("#d7a65f");
+// The log has stopped writing -- the one system message that must not be
+// missed.
+inline const QString TERM_ERROR     = QStringLiteral("#ff6b6b");
 // Transmitted data gets its own subtle shade so it reads as distinct from
 // device output without shouting.
 inline const QString TERM_TX        = QStringLiteral("#7f93a8");

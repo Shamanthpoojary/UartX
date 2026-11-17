@@ -3,6 +3,9 @@
 #include "appconstants.h"
 #include "configstore.h"
 #include "lineformat.h"
+#include "lineassembler.h"
+#include "logretention.h"
+#include "textdecoder.h"
 #include "theme.h"
 
 #include <QVBoxLayout>
@@ -12,6 +15,7 @@
 #include <QComboBox>
 #include <QLineEdit>
 #include <QCheckBox>
+#include <QSpinBox>
 #include <QLabel>
 #include <QPushButton>
 #include <QFrame>
@@ -164,6 +168,89 @@ SerialPortDialog::SerialPortDialog(MainWindow *app)
     bind(m_stopbits, &AppSettings::stopbits);
     bind(m_flow,     &AppSettings::flow);
 
+    // --- how the byte stream becomes lines, and lines become text ----------
+    // Both are properties of the device, like the baud rate, so they live
+    // here rather than with the display options.
+    root->addSpacing(4);
+    root->addWidget(hSeparator(this));
+    auto *framingForm = new QFormLayout;
+    framingForm->setLabelAlignment(Qt::AlignRight);
+    root->addLayout(framingForm);
+
+    auto *framing = new QComboBox(this);
+    framing->addItems(Framing::modeNames());
+    framing->setCurrentText(s.framing);
+    framing->setToolTip(tr("How incoming bytes are cut into lines.\n"
+                           "Auto suits text consoles; the others are for\n"
+                           "binary protocols and unusual terminators."));
+
+    auto *terminator = new QLineEdit(s.frameTerminator, this);
+    terminator->setPlaceholderText(tr("e.g. ;  or  \\x03  or  \\r\\n"));
+    auto *idleMs = new QSpinBox(this);
+    idleMs->setRange(1, 60000);
+    idleMs->setSuffix(tr(" ms"));
+    idleMs->setValue(s.frameIdleMs);
+    auto *fixedLen = new QSpinBox(this);
+    fixedLen->setRange(1, 4096);
+    fixedLen->setSuffix(tr(" bytes"));
+    fixedLen->setValue(s.frameFixedLength);
+
+    auto *encoding = new QComboBox(this);
+    encoding->addItems(TextDecoder::available());
+    encoding->setCurrentText(s.encoding);
+    encoding->setToolTip(tr("Auto shows valid UTF-8 (and plain ASCII) as text and any\n"
+                            "other byte as ‹xNN›. The log always keeps the exact bytes,\n"
+                            "whatever is chosen here."));
+
+    framingForm->addRow(tr("Line framing:"), framing);
+    framingForm->addRow(tr("Terminator:"),   terminator);
+    framingForm->addRow(tr("Idle gap:"),     idleMs);
+    framingForm->addRow(tr("Record size:"),  fixedLen);
+    framingForm->addRow(tr("Text encoding:"), encoding);
+
+    // Only the parameter the chosen framing uses is offered.
+    // QFormLayout::setRowVisible() is Qt 6.4; the label and field are hidden
+    // by hand so Qt 6.2 still builds.
+    auto showRow = [framingForm](QWidget *field, bool on) {
+        field->setVisible(on);
+        if (QWidget *label = framingForm->labelForField(field))
+            label->setVisible(on);
+    };
+    auto showFramingFields = [showRow, terminator, idleMs, fixedLen](const QString &mode) {
+        const Framing::Mode m = Framing::modeFromName(mode);
+        showRow(terminator, m == Framing::Mode::Terminator);
+        showRow(idleMs,     m == Framing::Mode::IdleGap);
+        showRow(fixedLen,   m == Framing::Mode::FixedLength);
+    };
+    showFramingFields(s.framing);
+
+    connect(framing, &QComboBox::currentTextChanged, this, [this, app, showFramingFields](const QString &v) {
+        app->settings().framing = v;
+        showFramingFields(v);
+        app->scheduleConfigSave();
+        setFixedSize(sizeHint());
+    });
+    connect(terminator, &QLineEdit::textChanged, app, [app, terminator](const QString &v) {
+        app->settings().frameTerminator = v;
+        // A terminator that does not parse would silently fall back to Auto;
+        // say so where it is typed instead.
+        const bool ok = v.isEmpty() || !Framing::parseTerminator(v).isEmpty();
+        terminator->setStyleSheet(ok ? QString() : QStringLiteral("color: #ff6b6b;"));
+        app->scheduleConfigSave();
+    });
+    connect(idleMs, qOverload<int>(&QSpinBox::valueChanged), app, [app](int v) {
+        app->settings().frameIdleMs = v;
+        app->scheduleConfigSave();
+    });
+    connect(fixedLen, qOverload<int>(&QSpinBox::valueChanged), app, [app](int v) {
+        app->settings().frameFixedLength = v;
+        app->scheduleConfigSave();
+    });
+    connect(encoding, &QComboBox::currentTextChanged, app, [app](const QString &v) {
+        app->settings().encoding = v;
+        app->scheduleConfigSave();
+    });
+
     root->addSpacing(6);
     root->addWidget(hintLabel(tr("Applied the next time the port is opened."), this),
                     0, Qt::AlignHCenter);
@@ -214,7 +301,7 @@ LogSavingDialog::LogSavingDialog(MainWindow *app)
     m_status->setWordWrap(true);
     grid->addWidget(m_status, 1, 1, 1, 2);
 
-    grid->addWidget(new QLabel(tr("File name:"), m_detail), 2, 0, Qt::AlignRight);
+    grid->addWidget(new QLabel(tr("Session folder:"), m_detail), 2, 0, Qt::AlignRight);
     m_template = new QLineEdit(s.logTemplate, m_detail);
     grid->addWidget(m_template, 2, 1);
 
@@ -223,9 +310,36 @@ LogSavingDialog::LogSavingDialog(MainWindow *app)
     grid->addWidget(hintLabel(tr("Placeholders: &Y year  &M month  &D day  &T time  &H port"), m_detail),
                     3, 1);
 
-    m_append = new QCheckBox(tr("Append if the file already exists (otherwise overwrite)"), m_detail);
-    m_append->setChecked(s.logAppend);
-    grid->addWidget(m_append, 4, 1);
+    // --- retention --------------------------------------------------------
+    // Everything is kept on disk, so something has to decide when old
+    // sessions go. Only folders UartX created are ever removed.
+    auto *keepRow = new QHBoxLayout;
+    auto *age = new QComboBox(m_detail);
+    age->addItems(RetentionPolicy::ageChoices());
+    age->setCurrentText(RetentionPolicy::choiceForAge(s.retentionSecs));
+    auto *size = new QComboBox(m_detail);
+    size->addItems(RetentionPolicy::sizeChoices());
+    size->setCurrentText(RetentionPolicy::choiceForSize(s.retentionBytes));
+    keepRow->addWidget(age);
+    keepRow->addWidget(new QLabel(tr("and at most"), m_detail));
+    keepRow->addWidget(size);
+    keepRow->addStretch(1);
+    grid->addWidget(new QLabel(tr("Keep logs for:"), m_detail), 4, 0, Qt::AlignRight);
+    grid->addLayout(keepRow, 4, 1);
+    auto *keepHint = hintLabel(tr("Oldest sessions are removed first, at startup and every hour. "
+                                  "The session that is open, and anything that is not a UartX "
+                                  "session folder, is never removed."), m_detail);
+    keepHint->setWordWrap(true);
+    grid->addWidget(keepHint, 5, 1);
+
+    connect(age, &QComboBox::currentTextChanged, app, [app](const QString &v) {
+        app->settings().retentionSecs = RetentionPolicy::ageFromChoice(v);
+        app->scheduleConfigSave();
+    });
+    connect(size, &QComboBox::currentTextChanged, app, [app](const QString &v) {
+        app->settings().retentionBytes = RetentionPolicy::sizeFromChoice(v);
+        app->scheduleConfigSave();
+    });
 
     m_checkTimer = new QTimer(this);
     m_checkTimer->setSingleShot(true);
@@ -246,10 +360,6 @@ LogSavingDialog::LogSavingDialog(MainWindow *app)
         app->settings().logTemplate = v;
         app->scheduleConfigSave();
     });
-    connect(m_append, &QCheckBox::toggled, app, [app](bool v) {
-        app->settings().logAppend = v;
-        app->scheduleConfigSave();
-    });
     connect(m_browse, &QPushButton::clicked, this, [this, app] {
         const QString start = App::effectiveLogDir(app->settings().logDir);
         const QString dir = QFileDialog::getExistingDirectory(this, tr("Choose log folder"), start);
@@ -258,8 +368,10 @@ LogSavingDialog::LogSavingDialog(MainWindow *app)
     });
 
     root->addSpacing(8);
-    auto *note = hintLabel(tr("A new log file is started each time the port is opened. "
-                              "Log files are plain text; colors are never written to them."), this);
+    auto *note = hintLabel(tr("Each time the port is opened a new folder is started, holding "
+                              "raw.log (the exact bytes received, nothing added) and lines.log "
+                              "(one numbered, timestamped line per record, including what you "
+                              "sent). Colors are never written to either."), this);
     note->setWordWrap(true);
     root->addWidget(note);
 
