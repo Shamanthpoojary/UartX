@@ -90,6 +90,7 @@ set(UARTX_SOURCES
     src/session.cpp             src/session.h
     src/agentbridge.h
     src/controlserver.cpp       src/controlserver.h
+    src/agentpanel.cpp          src/agentpanel.h
     src/terminalview.cpp        src/terminalview.h
     src/filterwindow.cpp        src/filterwindow.h
     src/colorrulesdialog.cpp    src/colorrulesdialog.h

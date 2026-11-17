@@ -31,7 +31,7 @@
 
 namespace {
 
-enum Exit { OK = 0, FAILED = 1, USAGE = 2, NOT_RUNNING = 3, TIMED_OUT = 4 };
+enum Exit { OK = 0, FAILED = 1, USAGE = 2, NOT_RUNNING = 3, TIMED_OUT = 4, AGENT_OFF = 5 };
 
 void out(const QString &s)
 {
@@ -61,12 +61,17 @@ const char *USAGE_TEXT = R"(uartx-ctl - ask a running UartX for exactly the UART
   uartx-ctl filter add NAME P               open a view in UartX showing only lines matching P
   uartx-ctl filter list | filter rm ID
   uartx-ctl note TEXT                       show a plain-language explanation to the user
-  uartx-ctl open [PORT] [--baud B] | close  connect / disconnect the port
-  uartx-ctl launch                          start UartX if it is not running
+  uartx-ctl open [PORT] [--baud B] [--force]
+                                            connect the port; --force closes whatever is open
+  uartx-ctl close                           disconnect the port
+  uartx-ctl launch                          open UartX under your control: starts it, or takes
+                                            over the one the user already has open (they see it)
 
   Patterns are literal and case-insensitive; add --regex and/or --case.
+  --why "plain words" says why you are asking; the user sees it before the pattern.
   --json prints the raw reply.  --agent ID (or env UARTX_AGENT) names the caller.
-  Exit codes: 0 ok, 1 error, 2 usage, 3 UartX not running, 4 wait timed out.)";
+  Exit codes: 0 ok, 1 error, 2 usage, 3 UartX not running, 4 wait timed out,
+              5 UartX is open but not under your control (run launch).)";
 
 struct Args
 {
@@ -81,7 +86,7 @@ struct Args
 Args parse(const QStringList &argv)
 {
     static const QSet<QString> valued = { "-n", "--match", "--before", "--after", "--max", "--since",
-                                          "--timeout", "--baud", "--agent" };
+                                          "--timeout", "--baud", "--agent", "--why" };
     Args a;
     for (int i = 1; i < argv.size(); ++i) {
         const QString s = argv[i];
@@ -138,8 +143,13 @@ public:
         QJsonObject reply;
         if (!call("hello", hello, 5000, &reply, error))
             return false;
+        m_mode = reply.value("mode").toString();
         return true;
     }
+
+    /// "agent" when this UartX is under an agent's control, "plain" when the
+    /// user opened it as an ordinary logger.
+    QString mode() const { return m_mode; }
 
     /// Sends one request and waits for its reply. False with `error` set on a
     /// transport problem or an error reply; `errorName` gets the code.
@@ -184,6 +194,7 @@ private:
     QLocalSocket m_socket;
     QByteArray   m_buffer;
     int          m_id = 0;
+    QString      m_mode;
 };
 
 QString fmtLine(const QJsonObject &l)
@@ -211,25 +222,36 @@ void printLines(const QJsonArray &lines)
         out(fmtLine(v.toObject()));
 }
 
-int launch()
+int launch(const QString &agent)
 {
     if (!readRuntime().isEmpty()) {
         QString error;
-        Connection probe;
-        if (probe.open(QStringLiteral("launcher"), &error)) {
-            out(QStringLiteral("UartX is already running"));
+        Connection c;
+        if (c.open(agent, &error)) {
+            if (c.mode() == QLatin1String("agent")) {
+                out(QStringLiteral("UartX is already running under agent control"));
+                return OK;
+            }
+            // The user opened it as a plain logger. Taking it over keeps
+            // their port session running and tells them, in the window, that
+            // an agent is now reading it.
+            QJsonObject r;
+            if (!c.call(QStringLiteral("takeover"), {}, 15000, &r, &error)) {
+                err(QStringLiteral("error %1").arg(error));
+                return FAILED;
+            }
+            out(QStringLiteral("took over the UartX the user had open; it now shows that %1 is in control")
+                    .arg(agent));
             return OK;
         }
     }
     const QString dir = QCoreApplication::applicationDirPath();
 #if defined(Q_OS_WIN)
     const QString exe = QDir(dir).filePath(QStringLiteral("UartX.exe"));
-#elif defined(Q_OS_MACOS)
-    const QString exe = QDir(dir).filePath(QStringLiteral("UartX"));
 #else
     const QString exe = QDir(dir).filePath(QStringLiteral("UartX"));
 #endif
-    if (!QFileInfo::exists(exe) || !QProcess::startDetached(exe, {})) {
+    if (!QFileInfo::exists(exe) || !QProcess::startDetached(exe, { QStringLiteral("--agent"), agent })) {
         err(QStringLiteral("cannot start %1").arg(QDir::toNativeSeparators(exe)));
         return FAILED;
     }
@@ -238,8 +260,8 @@ int launch()
         QThread::msleep(250);
         QString error;
         Connection c;
-        if (!readRuntime().isEmpty() && c.open(QStringLiteral("launcher"), &error)) {
-            out(QStringLiteral("UartX started"));
+        if (!readRuntime().isEmpty() && c.open(agent, &error) && c.mode() == QLatin1String("agent")) {
+            out(QStringLiteral("UartX started under %1's control").arg(agent));
             return OK;
         }
     }
@@ -264,12 +286,11 @@ int main(int argc, char **argv)
     }
 
     const QString cmd = a.positional.value(0);
-    if (cmd == QLatin1String("launch"))
-        return launch();
-
     QString agent = a.opt("--agent", qEnvironmentVariable("UARTX_AGENT"));
     if (agent.isEmpty())
         agent = QStringLiteral("claude");
+    if (cmd == QLatin1String("launch"))
+        return launch(agent);
 
     QString method;
     QJsonObject params;
@@ -324,6 +345,7 @@ int main(int argc, char **argv)
         method = cmd;
         if (a.positional.size() >= 2) params["port"] = a.positional[1];
         if (!a.opt("--baud").isEmpty()) params["baud"] = a.opt("--baud");
+        if (a.flag("--force")) params["force"] = true;
         timeoutMs = 60000;    // a dialog may be up waiting for the user
     } else if (cmd == QLatin1String("close")) {
         method = cmd;
@@ -332,6 +354,10 @@ int main(int argc, char **argv)
         out(QString::fromLatin1(USAGE_TEXT));
         return USAGE;
     }
+
+    // The reason is shown to the user ahead of the pattern, in plain words.
+    if (!a.opt("--why").isEmpty())
+        params["why"] = a.opt("--why");
 
     Connection c;
     QString error;
@@ -343,6 +369,8 @@ int main(int argc, char **argv)
     QString errorName;
     if (!c.call(method, params, timeoutMs, &r, &error, &errorName)) {
         err(QStringLiteral("error %1").arg(error));
+        if (errorName == QLatin1String("AGENT_OFF"))
+            return AGENT_OFF;
         return errorName == QLatin1String("TIMEOUT") ? TIMED_OUT : FAILED;
     }
     if (json) {
@@ -430,6 +458,23 @@ int main(int argc, char **argv)
         out(QStringLiteral("%1 %2 at %3 baud (session %4)")
                 .arg(r.value("already").toBool() ? QStringLiteral("already open:") : QStringLiteral("opened"),
                      r.value("port").toString(), r.value("baud").toString(), r.value("session").toString()));
+        // Opening only starts the reader; whether the device is really there
+        // shows a moment later. Say which, so the agent does not wait on a
+        // port that is not plugged in.
+        QString status;
+        QDeadlineTimer settle(3000);
+        while (!settle.hasExpired()) {
+            QJsonObject st;
+            if (c.call(QStringLiteral("status"), {}, 3000, &st, &error))
+                status = st.value("session").toObject().value("status").toString();
+            if (status == QLatin1String("connected") || status.startsWith(QLatin1String("waiting")))
+                break;
+            QThread::msleep(150);
+        }
+        if (status.startsWith(QLatin1String("waiting")))
+            out(QStringLiteral("port not present yet: UartX keeps retrying (is the board plugged in?)"));
+        else if (!status.isEmpty())
+            out(QStringLiteral("port status: %1").arg(status));
     } else if (method == QLatin1String("close")) {
         out(QStringLiteral("closed %1").arg(r.value("closed").toString()));
     }

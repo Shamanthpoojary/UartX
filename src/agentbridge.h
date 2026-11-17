@@ -41,8 +41,9 @@ public:
                                     const QJsonObject &params) = 0;
 
     /// Shows what an agent did -- every read included -- as a sentence the
-    /// user can follow.
-    virtual void agentActivity(const QString &agent, const QString &sentence) = 0;
+    /// user can follow, with the seq numbers of exactly the lines it was sent.
+    virtual void agentActivity(const QString &agent, const QString &sentence,
+                               const QVector<quint64> &seqs) = 0;
 };
 
 class AgentBridge
