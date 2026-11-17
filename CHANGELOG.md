@@ -6,6 +6,32 @@ All notable changes to UartX are recorded here. The format follows
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-11-17
+
+### Added — Claude Code integration (Windows only)
+
+- **Claude Code can watch a UART session without reading the whole log.**
+  `uartx-ctl` asks a running UartX for exactly the lines it needs: a summary
+  that returns counts only, searches with context, the newest lines, or a wait
+  for the next matching line. UartX does the filtering and replies with a
+  capped excerpt of up to 200 lines.
+- **What Claude did is shown to the user.** A *Claude — findings* tab lists
+  Claude's findings in plain words with line numbers, every request with the
+  reason Claude gave for it, and the exact lines each request returned. *Save
+  report...* writes all of it to Markdown, and `claude-report.md` is saved in
+  the session folder when the session ends.
+- **AI views**: Claude can open filtered views, labelled *AI ·*, in the side
+  panel to show a pattern such as connection attempts, errors or memory dips.
+- **Claude-only control.** The features are active only when Claude starts
+  UartX (`uartx-ctl launch`) or visibly takes over an open one. A UartX
+  started by the user stays a plain logger. Claude can read the device's
+  output but cannot send anything to it.
+- The Windows installer can add `uartx-ctl` to PATH and install the UartX
+  skill for Claude Code. The connection is a per-user local named pipe and
+  never touches the network.
+- **Side panel for filter views**: views open as tabs beside the terminal at a
+  quarter of the window width. Drag the divider to resize, or pop a view out.
+
 ### Changed
 
 - **Reading, logging and matching moved off the window's thread.** Each
@@ -309,7 +335,8 @@ removing prints from the firmware.
   the target machine needs no Qt installation. The installer runs without
   administrator rights and leaves `config.json` alone on uninstall.
 
-[Unreleased]: https://github.com/Shamanthpoojary/UartX/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/Shamanthpoojary/UartX/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/Shamanthpoojary/UartX/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/Shamanthpoojary/UartX/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/Shamanthpoojary/UartX/compare/v1.1.2...v1.2.0
 [1.1.2]: https://github.com/Shamanthpoojary/UartX/compare/v1.1.1...v1.1.2

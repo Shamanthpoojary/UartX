@@ -9,7 +9,7 @@ if(APPLE)
     set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE STRING "macOS architectures")
 endif()
 
-project(UartX VERSION 1.3.0 LANGUAGES CXX)
+project(UartX VERSION 1.4.0 LANGUAGES CXX)
 
 # Qt 6.2 is the floor so the Qt versions bundled with current LTS toolchains
 # work unchanged (Ubuntu 22.04 ships 6.2; Debian 12 and Ubuntu 24.04 ship 6.4).
