@@ -56,4 +56,9 @@ public:
     static QVector<QColor> suggestedColors();
 };
 
+// Carried by queued signals to the pipeline thread; declared here, beside the
+// type, so it precedes every use moc generates.
+#include <QMetaType>
+Q_DECLARE_METATYPE(ColorRuleSet)
+
 #endif // COLORRULES_H

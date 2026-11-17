@@ -39,6 +39,9 @@ jobs:
           ls -la build/linux/UartX
           file build/linux/UartX
 
+      - name: Test
+        run: ctest --test-dir build/linux --output-on-failure
+
   windows:
     name: Build (Windows)
     runs-on: windows-latest
@@ -65,6 +68,15 @@ jobs:
           $exe = "build/UartX.exe"
           if (-not (Test-Path $exe)) { throw "$exe was not built" }
           Get-Item $exe | Format-List Name, Length, VersionInfo
+
+      # The tests are plain executables, so they need the MinGW runtime that
+      # the installed Qt was built with on PATH as well as Qt's own DLLs.
+      - name: Test
+        shell: pwsh
+        run: |
+          $mingw = Get-ChildItem "$env:IQTA_TOOLS" -Directory -Filter "mingw*" | Select-Object -First 1
+          $env:PATH = (Join-Path $mingw.FullName "bin") + [IO.Path]::PathSeparator + $env:PATH
+          ctest --test-dir build --output-on-failure
 
   macos:
     name: Build (macOS)
@@ -97,3 +109,6 @@ jobs:
           test -x "$bin" || { echo "$bin was not built"; exit 1; }
           lipo -archs "$bin"
           lipo -archs "$bin" | grep -q x86_64 && lipo -archs "$bin" | grep -q arm64
+
+      - name: Test
+        run: ctest --test-dir build/macos --output-on-failure

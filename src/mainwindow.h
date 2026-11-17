@@ -5,7 +5,9 @@
 #include "colorrules.h"
 #include "textfilters.h"
 #include "lineformat.h"
-#include "lineassembler.h"
+#include "agentbridge.h"
+#include "logretention.h"
+#include "pipeline.h"
 #include "serialworker.h"
 
 #include <QMainWindow>
@@ -13,6 +15,7 @@
 #include <QStringList>
 #include <QVector>
 #include <QDateTime>
+#include <QThreadPool>
 
 class TerminalView;
 class FilterWindow;
@@ -25,18 +28,25 @@ class QLineEdit;
 class QLabel;
 class QWidget;
 class QTimer;
-class QFile;
 class QAction;
+class Session;
+class AgentPanel;
+class QTabWidget;
+class ControlServer;
+class QThread;
 
 /// The application window: menu bar, collapsible ribbon, terminal and status
 /// line, plus the serial session, the optional log file, and the live feed
 /// into any open Filter windows.
-class MainWindow : public QMainWindow
+class MainWindow : public QMainWindow, public AgentHost
 {
     Q_OBJECT
 
 public:
-    explicit MainWindow(QWidget *parent = nullptr);
+    /// `agentName` non-empty: UartX was started by that AI agent (through
+    /// `uartx-ctl launch`) and opens under its control, with the Claude panel.
+    /// Empty: a plain UART logger, until an agent takes it over.
+    explicit MainWindow(const QString &agentName = QString(), QWidget *parent = nullptr);
     ~MainWindow() override;
 
     // --- shared state used by the dialogs and the Filter windows ---
@@ -53,7 +63,9 @@ public:
     /// programmatic change (configuration load, dialog edit).
     void syncFromSettings();
 
-    /// Queues a debounced write of config.json.
+    /// Queues a debounced write of config.json, and passes the live display
+    /// settings to the open session. Every settings control already ends in
+    /// this call, which makes it the one place a change cannot be missed.
     void scheduleConfigSave();
 
     /// Replace the colour rules or the filter library; both refresh every
@@ -61,25 +73,23 @@ public:
     void applyColorRules(const ColorRuleSet &rules);
     void applyTextFilters(const TextFilterSet &filters);
 
-    /// Stops the reader thread and gives up ownership of it. The single place
-    /// the worker is torn down, because destroying a QThread that is still
-    /// inside run() aborts the process.
-    void releaseWorker();
-
-    // --- session log lifecycle ---
-    // Arms logging for a session; the file itself is not created until the
-    // first byte arrives, so an idle session leaves nothing behind.
-    bool openLog(const QString &port);
-    void logWrite(const QString &text, bool newline);
-    void closeLog();
+    /// Closes the session, if one is open: the reader stops, the open line is
+    /// flushed and the log closed before this returns.
+    void closeSession();
 
     void unregisterFilterWindow(FilterWindow *win);
 
-    /// Moves a filter view between the splitter and its own window.
+    // --- AgentHost: what an agent may ask the window to do ---
+    QJsonObject agentAction(const QString &agent, const QString &method,
+                            const QJsonObject &params) override;
+    void agentActivity(const QString &agent, const QString &sentence,
+                       const QVector<quint64> &seqs = {}) override;
+
+    /// Moves a filter view between the side panel and its own window.
     ///
-    /// The splitter holds at most one filter view: several side by side leave
-    /// every one of them too narrow to read, which is the opposite of what
-    /// docking is for. Docking a second view pops the first one out.
+    /// Docked views are tabs in one panel beside the terminal, so any number
+    /// of them share a single slice of the screen instead of each taking a
+    /// share of the terminal's width.
     void setFilterWindowDocked(FilterWindow *win, bool docked);
     QStringList knownPorts() const { return m_knownPorts; }
 
@@ -106,10 +116,12 @@ private slots:
     void onKeyTyped(bool isReturn, const QString &text);
     void onSendClicked();
 
-    void onSerialData(const QByteArray &data);
+    void onBatch(DisplayBatchPtr batch);
     void onSerialStatus(const QString &status);
     void onSerialFatal(const QString &message);
-    void onPoll();
+    void onLogState(const LogState &state);
+    void runRetention();
+    void onRetentionDone(const RetentionReport &report);
 
     void openColorRulesDialog();
     void openFilterWindow();
@@ -130,17 +142,31 @@ private:
     void setActiveConfig(const QString &name);
     void updateRibbonSummary();
 
-    void handleCompleteLine(const QString &line);
-    void appendSystemMessage(const QString &message);
-    /// Builds the display form of a line and pushes it to the terminal, the
-    /// log (raw only) and every Filter window.
-    LineRecord makeRecord(const QString &raw, bool isTx) const;
-    void publish(const LineRecord &record, bool newline = true);
+    void appendSystemMessage(const QString &message, const QColor &color = QColor());
     void sendPayload(const QString &text);
     void recallHistory(int direction);
+    PipelineConfig pipelineConfig(const QString &port, const QString &logDir) const;
+    RetentionPolicy retentionPolicy() const;
 
-    bool createLogFile();
     static QString expandTemplate(const QString &tmpl, const QString &port);
+
+    FilterWindow *createFilterWindow(const QString &title);
+    void startAgentApi();
+    void stopAgentApi();
+    void publishSnapshot();
+    void appendAgentLine(const QString &text, const QString &color);
+    QVector<DisplayLine> recentDisplayLines(int maxRecords) const;
+    QJsonObject agentOpen(const QString &agent, const QJsonObject &p);
+    QJsonObject agentFilterAdd(const QString &agent, const QJsonObject &p);
+    QJsonObject agentViewJson(const FilterWindow *win) const;
+    void enterAgentMode(const QString &agent, bool tookOver);
+    QStringList agentLines(const QVector<quint64> &seqs) const;
+    QString sessionLine() const;
+    void saveAgentReport();
+    bool writeAgentReport(const QString &path, QString *error) const;
+    void showDockPanel();
+    void hideDockPanelIfEmpty();
+    void applyDockSize();
 
     void updateStatusLine();
     void showTemporaryNotice(const QString &message);
@@ -150,37 +176,42 @@ private:
     QString   m_activeConfig;
 
     // ---- serial session ----
-    SerialWorker  *m_worker = nullptr;
-    LineAssembler  m_assembler;
+    // The reader, the pipeline and the log all live in the Session; this
+    // window only draws the batches it hands over.
+    Session *m_session = nullptr;
+    qint64   m_rxBytes = 0;
+    quint64  m_totalLines = 0;
+    QString  m_currentStatus;
+    LogState m_logState;
 
-    /// One ordered queue for both kinds of worker event, so a status line
-    /// never jumps ahead of the data that arrived before it.
-    struct Event
-    {
-        bool       isStatus;
-        QByteArray data;
-        QString    status;
-    };
-    QVector<Event> m_pending;            // drained by the 40 ms poll timer
+    // ---- agent API ----
+    // The control server runs on its own thread and reads the session through
+    // this snapshot; it reaches the window only through AgentHost.
+    std::shared_ptr<AgentBridge> m_bridge = std::make_shared<AgentBridge>();
+    QThread       *m_controlThread = nullptr;
+    ControlServer *m_control       = nullptr;
+    QHash<QString, FilterWindow *> m_agentViews;     // view id -> view
+    int            m_nextAgentView = 1;
+    QLabel        *m_agentLabel    = nullptr;
 
-    qint64  m_rxBytes = 0;
-    QString m_currentStatus;
-
-    // ---- logging ----
-    // The file is not created until the first byte actually arrives, so a
-    // session that receives nothing leaves no empty log behind.
-    QFile    *m_logFile = nullptr;
-    QString   m_logPath;
-    bool      m_logArmed = false;      // logging wanted, file not created yet
+    // ---- log retention ----
+    // Cleanup does file I/O across the whole log folder, so it runs on a
+    // pool thread; its result comes back as a queued call.
+    QThreadPool m_ioPool;
+    QTimer     *m_retentionTimer = nullptr;
+    bool        m_retentionRunning = false;
 
     // ---- filter windows ----
     QSplitter *m_splitter = nullptr;
     QVector<FilterWindow *> m_filterWindows;
 
-    /// The filter view currently sitting in the splitter, or nullptr.
-    /// Read from the splitter itself rather than from a flag, so it cannot
-    /// drift out of step with where the widgets actually are.
-    FilterWindow *dockedFilterWindow() const;
+    /// The side panel: the Claude tab (when an agent is in control) and every
+    /// docked filter view, as tabs.
+    QTabWidget *m_dockTabs = nullptr;
+    AgentPanel *m_agentPanel = nullptr;
+    bool        m_dockSizePending = false;
+    bool        m_dockUserSized   = false;   ///< the user dragged the divider
+    QString     m_agentName;            ///< empty until an agent is in control
 
     // ---- widgets ----
     RibbonBar    *m_ribbon         = nullptr;
@@ -201,7 +232,6 @@ private:
     int     m_historyIndex = -1;
     QString m_historyDraft;
 
-    QTimer *m_pollTimer   = nullptr;
     QTimer *m_noticeTimer = nullptr;
     QTimer *m_saveTimer   = nullptr;
 
