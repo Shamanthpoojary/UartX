@@ -5,6 +5,7 @@
 #include "colorrules.h"
 #include "textfilters.h"
 #include "lineformat.h"
+#include "agentbridge.h"
 #include "logretention.h"
 #include "pipeline.h"
 #include "serialworker.h"
@@ -29,11 +30,13 @@ class QWidget;
 class QTimer;
 class QAction;
 class Session;
+class ControlServer;
+class QThread;
 
 /// The application window: menu bar, collapsible ribbon, terminal and status
 /// line, plus the serial session, the optional log file, and the live feed
 /// into any open Filter windows.
-class MainWindow : public QMainWindow
+class MainWindow : public QMainWindow, public AgentHost
 {
     Q_OBJECT
 
@@ -70,6 +73,11 @@ public:
     void closeSession();
 
     void unregisterFilterWindow(FilterWindow *win);
+
+    // --- AgentHost: what an agent may ask the window to do ---
+    QJsonObject agentAction(const QString &agent, const QString &method,
+                            const QJsonObject &params) override;
+    void agentActivity(const QString &agent, const QString &sentence) override;
 
     /// Moves a filter view between the splitter and its own window.
     ///
@@ -136,6 +144,16 @@ private:
 
     static QString expandTemplate(const QString &tmpl, const QString &port);
 
+    FilterWindow *createFilterWindow(const QString &title);
+    void startAgentApi();
+    void stopAgentApi();
+    void publishSnapshot();
+    void appendAgentLine(const QString &text, const QString &color);
+    QVector<DisplayLine> recentDisplayLines(int maxRecords) const;
+    QJsonObject agentOpen(const QString &agent, const QJsonObject &p);
+    QJsonObject agentFilterAdd(const QString &agent, const QJsonObject &p);
+    QJsonObject agentViewJson(const FilterWindow *win) const;
+
     void updateStatusLine();
     void showTemporaryNotice(const QString &message);
 
@@ -151,6 +169,16 @@ private:
     quint64  m_totalLines = 0;
     QString  m_currentStatus;
     LogState m_logState;
+
+    // ---- agent API ----
+    // The control server runs on its own thread and reads the session through
+    // this snapshot; it reaches the window only through AgentHost.
+    std::shared_ptr<AgentBridge> m_bridge = std::make_shared<AgentBridge>();
+    QThread       *m_controlThread = nullptr;
+    ControlServer *m_control       = nullptr;
+    QHash<QString, FilterWindow *> m_agentViews;     // view id -> view
+    int            m_nextAgentView = 1;
+    QLabel        *m_agentLabel    = nullptr;
 
     // ---- log retention ----
     // Cleanup does file I/O across the whole log folder, so it runs on a

@@ -55,6 +55,8 @@ public:
 
     /// Recent records; valid while the session object lives.
     const RecentRing *recent() const;
+    /// The same, shared: stays valid for as long as the caller holds it.
+    std::shared_ptr<const RecentRing> ring() const;
 
     LogState logState() const { return m_logState; }
 

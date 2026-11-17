@@ -160,6 +160,11 @@ void Session::batchRendered()
         m_pipeline->markBatchRendered();
 }
 
+std::shared_ptr<const RecentRing> Session::ring() const
+{
+    return m_pipeline ? m_pipeline->ring() : nullptr;
+}
+
 const RecentRing *Session::recent() const
 {
     return m_pipeline ? &m_pipeline->recent() : nullptr;

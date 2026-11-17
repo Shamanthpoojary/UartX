@@ -41,17 +41,41 @@ public:
     int capacity() const { return m_capacity; }
 
     /// Up to `maxCount` records with seq >= fromSeq, oldest first.
+    ///
+    /// Seq numbers within a session are consecutive, so the start is found by
+    /// arithmetic rather than a scan: a poll for "anything new" costs the same
+    /// whether the ring holds ten records or fifty thousand.
     QVector<LineRecord> since(quint64 fromSeq, int maxCount) const
     {
         QMutexLocker lock(&m_mutex);
         QVector<LineRecord> out;
         const int n = m_items.size();
-        for (int i = 0; i < n && out.size() < maxCount; ++i) {
-            const LineRecord &r = m_items.at((m_head + i) % n);
-            if (r.seq >= fromSeq)
-                out.append(r);
-        }
+        if (n == 0 || maxCount <= 0)
+            return out;
+        const quint64 oldest = m_items.at(m_head % n).seq;
+        int start = 0;
+        if (fromSeq > oldest)
+            start = int(qMin<quint64>(fromSeq - oldest, quint64(n)));
+        out.reserve(qMin(maxCount, n - start));
+        for (int i = start; i < n && out.size() < maxCount; ++i)
+            out.append(m_items.at((m_head + i) % n));
         return out;
+    }
+
+    /// Highest seq held, or 0 when empty.
+    quint64 lastSeq() const
+    {
+        QMutexLocker lock(&m_mutex);
+        const int n = m_items.size();
+        return n ? m_items.at((m_head + n - 1) % n).seq : 0;
+    }
+
+    /// Lowest seq held, or 0 when empty.
+    quint64 firstSeq() const
+    {
+        QMutexLocker lock(&m_mutex);
+        const int n = m_items.size();
+        return n ? m_items.at(m_head % n).seq : 0;
     }
 
     /// The newest `count` records, oldest first.

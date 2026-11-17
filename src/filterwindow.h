@@ -4,6 +4,7 @@
 #include "colorrules.h"
 #include "textfilters.h"
 #include "lineformat.h"
+#include "linequery.h"
 
 #include <QWidget>
 #include <QDialog>
@@ -90,6 +91,23 @@ public:
     /// Rebuilds both selection lists after the rules or filters change.
     void refreshSources(const ColorRuleSet &rules, const TextFilterSet &filters);
 
+    /// Turns this into a view an agent asked for: it shows the lines matching
+    /// `query`, says who made it and why, and hides the user's rule and filter
+    /// checklists, which do not apply to it. The user can still read, search,
+    /// save, undock and close it.
+    void makeAgentView(const QString &owner, const QString &id, const QString &name,
+                       const LineQuery &query);
+    bool isAgentOwned() const { return m_agentOwned; }
+    QString agentId() const { return m_agentId; }
+    QString agentOwner() const { return m_agentOwner; }
+    QString agentName() const { return m_agentName; }
+    const LineQuery &agentQuery() const { return m_agentQuery; }
+    int shownCount() const { return m_shown; }
+
+    /// Fills the view from lines that arrived before it was opened, so an
+    /// agent's view is useful at once instead of starting empty.
+    void backfill(const QVector<DisplayLine> &lines);
+
     /// Writes the visible lines, preceded by a header recording the filter
     /// settings that produced them. Separated from the Save action so the
     /// file format can be exercised without a file dialog.
@@ -143,6 +161,14 @@ private:
     QTimer      *m_noticeTimer  = nullptr;
     QPushButton *m_dockBtn      = nullptr;
     QLabel      *m_titleLabel   = nullptr;
+    QWidget     *m_ruleBox      = nullptr;
+    QWidget     *m_filterBox    = nullptr;
+
+    bool         m_agentOwned   = false;
+    QString      m_agentOwner;
+    QString      m_agentId;
+    QString      m_agentName;
+    LineQuery    m_agentQuery;
     QString      m_title;
     bool         m_docked       = true;
 

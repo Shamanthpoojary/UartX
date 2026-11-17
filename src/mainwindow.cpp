@@ -8,6 +8,8 @@
 #include "theme.h"
 #include "session.h"
 #include "textdecoder.h"
+#include "controlserver.h"
+#include "linequery.h"
 
 #include <QMenuBar>
 #include <QMenu>
@@ -40,6 +42,8 @@
 #include <QFontMetrics>
 #include <QLocale>
 #include <QPointer>
+#include <QJsonArray>
+#include <QThread>
 
 namespace {
 
@@ -128,10 +132,12 @@ MainWindow::MainWindow(QWidget *parent)
 
     updateStatusLine();
     updateRibbonSummary();
+    startAgentApi();
 }
 
 MainWindow::~MainWindow()
 {
+    stopAgentApi();
     closeSession();
     m_ioPool.waitForDone();
 }
@@ -255,6 +261,13 @@ void MainWindow::buildUi()
     m_statusLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     m_statusLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
     statusBar()->addWidget(m_statusLabel, 1);
+
+    // Says whether an agent is connected and what it last did, so the user
+    // never has to wonder whether something is acting on the session.
+    m_agentLabel = new QLabel(this);
+    m_agentLabel->setStyleSheet(QStringLiteral("color: %1; padding-right: 8px;").arg(App::TERM_AGENT));
+    m_agentLabel->hide();
+    statusBar()->addPermanentWidget(m_agentLabel);
     statusBar()->setSizeGripEnabled(true);
 
     m_terminal->setFocus();
@@ -541,6 +554,11 @@ void MainWindow::closeSession()
     // this thread; deleteLater lets them arrive and be drawn first.
     session->deleteLater();
 
+    m_bridge->update([](SessionSnapshot &s) {
+        s.open = false;
+        s.status = QStringLiteral("closed");
+    });
+
     if (m_logState.created && !m_logState.stopped)
         appendSystemMessage(tr("log saved: %1").arg(QFileInfo(m_logState.sessionDir).fileName()));
     else if (m_logState.enabled && !m_logState.created)
@@ -653,6 +671,7 @@ void MainWindow::onConnectClicked()
     connect(m_session, &Session::fatalError,      this, &MainWindow::onSerialFatal);
     connect(m_session, &Session::logStateChanged, this, &MainWindow::onLogState);
     m_session->open(cfg, pc);
+    publishSnapshot();
 
     m_connectBtn->setText(tr("Disconnect"));
     m_terminal->setFocus();
@@ -704,6 +723,10 @@ void MainWindow::onBatch(DisplayBatchPtr batch)
     if (current) {
         m_rxBytes = batch->rxBytes;
         m_totalLines = batch->totalLines;
+        m_bridge->update([&batch](SessionSnapshot &s) {
+            s.totalLines = batch->totalLines;
+            s.rxBytes = batch->rxBytes;
+        });
         m_session->batchRendered();
         if (!m_notificationActive)
             updateStatusLine();
@@ -715,6 +738,7 @@ void MainWindow::onSerialStatus(const QString &status)
     // The status line itself reaches the screen through the pipeline, in
     // order with the data; this only keeps the status bar and ribbon current.
     m_currentStatus = status;
+    m_bridge->update([&status](SessionSnapshot &s) { s.status = status; });
     updateRibbonSummary();
     updateStatusLine();
 }
@@ -736,6 +760,7 @@ void MainWindow::onLogState(const LogState &state)
         return;
     const bool newlyStopped = state.stopped && !m_logState.stopped;
     m_logState = state;
+    m_bridge->update([&state](SessionSnapshot &s) { s.log = state; });
     if (newlyStopped)
         appendSystemMessage(tr("LOG STOPPED: %1 - nothing more is being saved")
                                 .arg(state.reason),
@@ -1075,16 +1100,29 @@ void MainWindow::applyTextFilters(const TextFilterSet &filters)
     scheduleConfigSave();
 }
 
-void MainWindow::openFilterWindow()
+FilterWindow *MainWindow::createFilterWindow(const QString &title)
 {
-    auto *win = new FilterWindow(this, tr("Filter"));
+    auto *win = new FilterWindow(this, title);
     m_filterWindows.append(win);
 
     connect(win, &FilterWindow::dockRequested, this, &MainWindow::setFilterWindowDocked);
     connect(win, &FilterWindow::closeRequested, this, [this](FilterWindow *w) {
+        // The user always wins: an agent's view closes like any other, and
+        // the agent finds out the next time it lists its views.
+        if (w->isAgentOwned()) {
+            m_agentViews.remove(w->agentId());
+            appendAgentLine(tr("You closed %1's view \u201c%2\u201d").arg(w->agentOwner(), w->agentName()),
+                            App::TERM_AGENT);
+        }
         unregisterFilterWindow(w);
         w->deleteLater();
     });
+    return win;
+}
+
+void MainWindow::openFilterWindow()
+{
+    FilterWindow *win = createFilterWindow(tr("Filter"));
 
     // The first view docks beside the terminal; every one after it opens as a
     // window of its own. Stacking them all into the splitter divided the width
@@ -1221,6 +1259,261 @@ void MainWindow::deleteConfigNamed(const QString &name)
     showTemporaryNotice(tr("Configuration '%1' deleted").arg(name));
 }
 
+// ------------------------------------------------------------------ agent API
+// An AI agent (Claude Code, through uartx-ctl) asks for what it needs and
+// UartX sends back only that. Everything it does lands here, on the GUI
+// thread, and is shown to the user as it happens.
+
+namespace {
+
+/// Agent views open as views of their own; past this many the agent has to
+/// close one first, so it cannot bury the screen.
+constexpr int MAX_AGENT_VIEWS = 8;
+
+QJsonObject agentError(const QString &code, const QString &message)
+{
+    return QJsonObject{ { QStringLiteral("error"), code }, { QStringLiteral("message"), message } };
+}
+
+QString agentDisplayName(const QString &agent)
+{
+    // "claude#2" -> "Claude #2"
+    QString name = agent;
+    name.replace(QLatin1Char('#'), QStringLiteral(" #"));
+    return name.left(1).toUpper() + name.mid(1);
+}
+
+} // namespace
+
+void MainWindow::startAgentApi()
+{
+    m_controlThread = new QThread(this);
+    m_controlThread->setObjectName(QStringLiteral("agent-api"));
+    m_control = new ControlServer(m_bridge, this, this);
+    m_control->moveToThread(m_controlThread);
+    connect(m_controlThread, &QThread::finished, m_control, &QObject::deleteLater);
+    m_controlThread->start();
+    QMetaObject::invokeMethod(m_control, "start", Qt::QueuedConnection);
+}
+
+void MainWindow::stopAgentApi()
+{
+    if (!m_controlThread)
+        return;
+    QThread *thread = m_controlThread;
+    m_controlThread = nullptr;
+    QMetaObject::invokeMethod(m_control, "stop", Qt::QueuedConnection);
+    thread->quit();
+    // The control thread may be in the middle of a blocking call into this
+    // window; keep serving those while it winds down, or each would wait on
+    // the other.
+    while (!thread->wait(10))
+        QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+    m_control = nullptr;
+}
+
+void MainWindow::publishSnapshot()
+{
+    if (!m_session)
+        return;
+    const QString port = m_state.settings.port;
+    const QString baud = m_state.settings.baud;
+    const QString encoding = m_state.settings.encoding;
+    const QString id = m_session->id();
+    const QString status = m_currentStatus;
+    auto ring = m_session->ring();
+    m_bridge->update([=](SessionSnapshot &s) {
+        s = SessionSnapshot();
+        s.open = true;
+        s.id = id;
+        s.port = port;
+        s.baud = baud;
+        s.encoding = encoding;
+        s.status = status;
+        s.ring = ring;
+    });
+}
+
+void MainWindow::appendAgentLine(const QString &text, const QString &color)
+{
+    m_terminal->appendLine(text, QColor(color), true);
+}
+
+void MainWindow::agentActivity(const QString &agent, const QString &sentence)
+{
+    const QString who = agentDisplayName(agent);
+    appendAgentLine(QStringLiteral("◆ %1 %2").arg(who, sentence), App::TERM_AGENT);
+    m_agentLabel->setText(QStringLiteral("● %1 · %2")
+                              .arg(who, QTime::currentTime().toString(QStringLiteral("HH:mm:ss"))));
+    m_agentLabel->setToolTip(tr("Last action: %1").arg(sentence));
+    m_agentLabel->show();
+}
+
+QVector<DisplayLine> MainWindow::recentDisplayLines(int maxRecords) const
+{
+    QVector<DisplayLine> out;
+    if (!m_session)
+        return out;
+    const auto ring = m_session->ring();
+    if (!ring)
+        return out;
+    TextDecoder decoder;
+    decoder.setEncoding(m_state.settings.encoding);
+    const DisplayOptions options = displayOptions();
+
+    // A line shown early by the quiet timer is stored in pieces; a view wants
+    // it whole, the way it would have arrived had the device not paused.
+    LineRecord pending;
+    bool havePending = false;
+    for (const LineRecord &r : ring->tail(maxRecords)) {
+        if (r.dir == Direction::Sys || r.has(LineFlag::Typed))
+            continue;
+        LineRecord rec = r;
+        if (r.has(LineFlag::Partial) || r.has(LineFlag::Continuation)) {
+            if (!havePending) {
+                pending = r;
+                pending.bytes.clear();
+                havePending = true;
+            }
+            pending.bytes += r.bytes;
+            if (r.has(LineFlag::Partial))
+                continue;
+            rec = pending;
+            havePending = false;
+        }
+        out.append(Pipeline::makeDisplayLine(rec, decoder.decode(rec.bytes), options,
+                                             m_state.colorRules, m_state.settings.colorize,
+                                             m_state.settings.deviceColors));
+    }
+    return out;
+}
+
+QJsonObject MainWindow::agentViewJson(const FilterWindow *win) const
+{
+    return QJsonObject{ { "id", win->agentId() },
+                        { "name", win->agentName() },
+                        { "owner", win->agentOwner() },
+                        { "pattern", win->agentQuery().pattern() },
+                        { "regex", win->agentQuery().isRegex() },
+                        { "shown", win->shownCount() },
+                        { "docked", win->isDocked() } };
+}
+
+QJsonObject MainWindow::agentOpen(const QString &agent, const QJsonObject &p)
+{
+    const QString port = p.value("port").toString(m_state.settings.port).trimmed();
+    const QString baud = p.value("baud").toString(m_state.settings.baud).trimmed();
+    if (m_session) {
+        if (port.compare(m_state.settings.port, Qt::CaseInsensitive) == 0)
+            return QJsonObject{ { "session", m_session->id() }, { "port", m_state.settings.port },
+                                { "baud", m_state.settings.baud }, { "already", true } };
+        return agentError(QStringLiteral("PORT_BUSY"),
+                          tr("%1 is open in UartX; close it first").arg(m_state.settings.port));
+    }
+    if (port.isEmpty())
+        return agentError(QStringLiteral("NOT_FOUND"), tr("no port given and none selected"));
+
+    m_state.settings.port = port;
+    m_state.settings.baud = baud;
+    syncFromSettings();
+    onConnectClicked();
+    if (!m_session)
+        return agentError(QStringLiteral("PORT_BUSY"), tr("could not open %1").arg(port));
+
+    agentActivity(agent, tr("opened %1 at %2 baud").arg(port, baud));
+    return QJsonObject{ { "session", m_session->id() }, { "port", port }, { "baud", baud } };
+}
+
+QJsonObject MainWindow::agentFilterAdd(const QString &agent, const QJsonObject &p)
+{
+    const QString name = p.value("name").toString().trimmed().left(48);
+    const LineQuery query(p.value("pattern").toString(), p.value("regex").toBool(),
+                          p.value("case").toBool());
+    if (name.isEmpty())
+        return agentError(QStringLiteral("INVALID_PATTERN"), tr("a view needs a name"));
+    if (!query.isValid() || query.pattern().isEmpty())
+        return agentError(QStringLiteral("INVALID_PATTERN"),
+                          query.isValid() ? tr("a view needs a pattern") : query.error());
+    if (m_agentViews.size() >= MAX_AGENT_VIEWS)
+        return agentError(QStringLiteral("LIMIT_EXCEEDED"),
+                          tr("%1 agent views are open; close one first").arg(MAX_AGENT_VIEWS));
+
+    const QString id = QStringLiteral("v%1").arg(m_nextAgentView++);
+    FilterWindow *win = createFilterWindow(name);
+    win->makeAgentView(agent, id, name, query);
+    m_agentViews.insert(id, win);
+    // The newest view goes beside the terminal, where the user is looking;
+    // whatever was docked there floats out rather than disappearing.
+    setFilterWindowDocked(win, true);
+    win->backfill(recentDisplayLines(App::MAX_SCROLLBACK_LINES));
+
+    agentActivity(agent, tr("opened the view “%1” showing lines matching %2 (%3 already)")
+                             .arg(name, query.describe())
+                             .arg(win->shownCount()));
+    return agentViewJson(win);
+}
+
+QJsonObject MainWindow::agentAction(const QString &agent, const QString &method, const QJsonObject &p)
+{
+    if (method == QLatin1String("open"))
+        return agentOpen(agent, p);
+
+    if (method == QLatin1String("close")) {
+        if (!m_session)
+            return agentError(QStringLiteral("NOT_FOUND"), tr("no session is open"));
+        const QString port = m_state.settings.port;
+        onConnectClicked();      // toggles: closes the open session
+        agentActivity(agent, tr("closed %1").arg(port));
+        return QJsonObject{ { "closed", port } };
+    }
+
+    if (method == QLatin1String("filter.add"))
+        return agentFilterAdd(agent, p);
+
+    if (method == QLatin1String("filter.list")) {
+        QJsonArray views;
+        for (const FilterWindow *win : std::as_const(m_agentViews))
+            views.append(agentViewJson(win));
+        return QJsonObject{ { "views", views } };
+    }
+
+    if (method == QLatin1String("filter.rm")) {
+        const QString id = p.value("id").toString();
+        FilterWindow *win = m_agentViews.value(id);
+        // Only agent views are in this table, so an agent can never close a
+        // view the user made.
+        if (!win)
+            return agentError(QStringLiteral("NOT_FOUND"), tr("no agent view '%1'").arg(id));
+        const QString name = win->agentName();
+        m_agentViews.remove(id);
+        unregisterFilterWindow(win);
+        win->hide();
+        win->deleteLater();
+        agentActivity(agent, tr("closed its view “%1”").arg(name));
+        return QJsonObject{ { "removed", id } };
+    }
+
+    if (method == QLatin1String("note")) {
+        const QString text = p.value("text").toString().trimmed().left(2000);
+        if (text.isEmpty())
+            return agentError(QStringLiteral("INVALID_PATTERN"), tr("a note needs text"));
+        // The explanation is the line a person who relies on the agent reads
+        // first, so it stands out -- and it goes into lines.log too, beside
+        // the data it explains.
+        const QString who = agentDisplayName(agent);
+        const QStringList paragraphs = text.split(QLatin1Char('\n'));
+        for (int i = 0; i < paragraphs.size(); ++i)
+            appendAgentLine((i == 0 ? QStringLiteral("\U0001F4AC %1: ").arg(who) : QStringLiteral("    "))
+                                + paragraphs[i],
+                            App::TERM_NOTE);
+        if (m_session)
+            m_session->recordSystem(QStringLiteral("note from %1: %2").arg(agent, text));
+        return QJsonObject{ { "shown", true } };
+    }
+
+    return agentError(QStringLiteral("NOT_FOUND"), tr("unknown action '%1'").arg(method));
+}
+
 // ------------------------------------------------------------------- dialogs
 
 void MainWindow::dlgSerialPort()      { (new SerialPortDialog(this))->show(); }
@@ -1233,6 +1526,7 @@ void MainWindow::dlgAbout()           { (new AboutDialog(this))->show(); }
 
 void MainWindow::closeEvent(QCloseEvent *e)
 {
+    stopAgentApi();
     closeSession();
     m_noticeTimer->stop();
     m_retentionTimer->stop();
