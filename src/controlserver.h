@@ -9,6 +9,7 @@
 #include <QObject>
 #include <QPointer>
 #include <QString>
+#include <QVector>
 #include <memory>
 
 class QLocalServer;
@@ -41,7 +42,11 @@ class ControlServer : public QObject
 public:
     static constexpr int PROTOCOL = 1;
 
-    ControlServer(std::shared_ptr<AgentBridge> bridge, AgentHost *host, QObject *hostObject);
+    /// `agentMode` false: UartX was opened by the user and is a plain logger.
+    /// The API then answers only hello, status and takeover; an agent has to
+    /// take over -- which the user sees -- before it can read anything.
+    ControlServer(std::shared_ptr<AgentBridge> bridge, AgentHost *host, QObject *hostObject,
+                  bool agentMode);
     ~ControlServer() override;
 
     /// Where uartx-ctl looks for the endpoint and token.
@@ -66,14 +71,15 @@ private:
               const QString &message);
 
     QJsonObject doStatus();
-    QJsonObject doSummary(const QString &agent);
+    QJsonObject doSummary(const QString &agent, const QJsonObject &p);
     QJsonObject doTail(const QString &agent, const QJsonObject &p);
     QJsonObject doSearch(const QString &agent, const QJsonObject &p);
     bool        startWait(QLocalSocket *socket, const QJsonValue &id, const QString &agent,
                           const QJsonObject &p, QString *error);
     void        pollWaits();
     QJsonObject callHost(const QString &agent, const QString &method, const QJsonObject &p);
-    void        activity(const QString &agent, const QString &sentence);
+    void        activity(const QString &agent, const QString &sentence,
+                         const QVector<quint64> &seqs = {});
 
     QJsonObject lineJson(const LineRecord &r, const SessionSnapshot &s) const;
     QString     textOf(const LineRecord &r, const SessionSnapshot &s) const;
@@ -84,6 +90,7 @@ private:
     QLocalServer                *m_server = nullptr;
     QTimer                      *m_waitTimer = nullptr;
     QString                      m_token;
+    bool                         m_agentMode = false;
     QString                      m_endpoint;
     QHash<QLocalSocket *, std::shared_ptr<Client>> m_clients;
     QVector<std::shared_ptr<Wait>> m_waits;

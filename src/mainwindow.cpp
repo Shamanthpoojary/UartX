@@ -10,6 +10,7 @@
 #include "textdecoder.h"
 #include "controlserver.h"
 #include "linequery.h"
+#include "agentpanel.h"
 
 #include <QMenuBar>
 #include <QMenu>
@@ -44,6 +45,9 @@
 #include <QPointer>
 #include <QJsonArray>
 #include <QThread>
+#include <QTabWidget>
+#include <QFileDialog>
+#include <QSaveFile>
 
 namespace {
 
@@ -79,7 +83,7 @@ void sizeButton(QPushButton *button, int minimum, const QStringList &alternative
 
 // ---------------------------------------------------------------------------
 
-MainWindow::MainWindow(QWidget *parent)
+MainWindow::MainWindow(const QString &agentName, QWidget *parent)
     : QMainWindow(parent)
 {
     setWindowTitle(QStringLiteral("%1 - %2").arg(App::NAME, App::TAGLINE));
@@ -132,6 +136,8 @@ MainWindow::MainWindow(QWidget *parent)
 
     updateStatusLine();
     updateRibbonSummary();
+    if (!agentName.isEmpty())
+        enterAgentMode(agentName, false);
     startAgentApi();
 }
 
@@ -254,7 +260,17 @@ void MainWindow::buildUi()
     m_splitter->setChildrenCollapsible(false);
     m_splitter->setHandleWidth(6);
     m_splitter->addWidget(terminalWrap);
+
+    // One panel for everything docked beside the terminal, each view a tab.
+    // Hidden until something is docked, so a plain session is all terminal.
+    m_dockTabs = new QTabWidget(m_splitter);
+    m_dockTabs->setDocumentMode(true);
+    m_dockTabs->setMovable(true);
+    m_dockTabs->setMinimumWidth(220);
+    m_dockTabs->hide();
+    m_splitter->addWidget(m_dockTabs);
     m_splitter->setStretchFactor(0, 3);
+    m_splitter->setStretchFactor(1, 1);
     root->addWidget(m_splitter, 1);
 
     m_statusLabel = new QLabel(m_currentStatus, this);
@@ -558,6 +574,14 @@ void MainWindow::closeSession()
         s.open = false;
         s.status = QStringLiteral("closed");
     });
+
+    // What the agent looked at and found belongs with the log it looked at.
+    if (m_agentPanel && !m_agentPanel->isEmpty() && m_logState.created) {
+        const QString path = QDir(m_logState.sessionDir).filePath(QStringLiteral("claude-report.md"));
+        QString error;
+        if (writeAgentReport(path, &error))
+            appendSystemMessage(tr("Claude's report saved with the log: %1").arg(QFileInfo(path).fileName()));
+    }
 
     if (m_logState.created && !m_logState.stopped)
         appendSystemMessage(tr("log saved: %1").arg(QFileInfo(m_logState.sessionDir).fileName()));
@@ -1109,11 +1133,6 @@ FilterWindow *MainWindow::createFilterWindow(const QString &title)
     connect(win, &FilterWindow::closeRequested, this, [this](FilterWindow *w) {
         // The user always wins: an agent's view closes like any other, and
         // the agent finds out the next time it lists its views.
-        if (w->isAgentOwned()) {
-            m_agentViews.remove(w->agentId());
-            appendAgentLine(tr("You closed %1's view \u201c%2\u201d").arg(w->agentOwner(), w->agentName()),
-                            App::TERM_AGENT);
-        }
         unregisterFilterWindow(w);
         w->deleteLater();
     });
@@ -1124,56 +1143,70 @@ void MainWindow::openFilterWindow()
 {
     FilterWindow *win = createFilterWindow(tr("Filter"));
 
-    // The first view docks beside the terminal; every one after it opens as a
-    // window of its own. Stacking them all into the splitter divided the width
-    // again with each new view, until none of them was wide enough to read a
-    // log line -- and the terminal they were meant to be read against was the
-    // first thing squeezed out.
-    if (dockedFilterWindow())
-        win->setDocked(false);      // emits dockRequested, which floats it
-    else
-        setFilterWindowDocked(win, true);
+    // Docked as a tab beside the terminal. Tabs share one quarter-width
+    // panel, so a new view never takes width away from the terminal.
+    setFilterWindowDocked(win, true);
 }
 
-FilterWindow *MainWindow::dockedFilterWindow() const
+void MainWindow::showDockPanel()
 {
-    for (int i = 0; i < m_splitter->count(); ++i)
-        if (auto *win = qobject_cast<FilterWindow *>(m_splitter->widget(i)))
-            return win;
-    return nullptr;
+    if (m_dockTabs->isVisible())
+        return;
+    m_dockTabs->show();
+    // A quarter of the width: enough to read a filtered line, while the full
+    // stream keeps the space. Applied once the panel is laid out; after that
+    // the divider is the user's to move, and is left where they put it.
+    QTimer::singleShot(0, this, [this] {
+        const int total = qMax(m_splitter->width(), 800);
+        m_splitter->setSizes({ total * 3 / 4, total / 4 });
+    });
+}
+
+void MainWindow::hideDockPanelIfEmpty()
+{
+    if (m_dockTabs->count() == 0)
+        m_dockTabs->hide();
 }
 
 void MainWindow::setFilterWindowDocked(FilterWindow *win, bool docked)
 {
     if (docked) {
-        // One view at a time in the dock: whichever is there makes way, rather
-        // than the two of them sharing a space sized for one.
-        if (FilterWindow *current = dockedFilterWindow(); current && current != win)
-            current->setDocked(false);
-
         // The flag survives reparenting, so clearing it is what actually turns
         // the floating window back into a plain child widget.
         win->setWindowFlag(Qt::Window, false);
-        m_splitter->addWidget(win);
-        // Two thirds terminal, one third filter: enough of the filtered view
-        // to read, without losing sight of the stream it came from.
-        const int total = qMax(m_splitter->width(), 600);
-        m_splitter->setSizes({ total * 2 / 3, total / 3 });
+        if (m_dockTabs->indexOf(win) < 0)
+            m_dockTabs->addTab(win, win->tabTitle());
+        m_dockTabs->setCurrentWidget(win);
         win->show();
+        showDockPanel();
     } else {
-        // Taking it out of the splitter first stops the layout briefly
-        // reparenting it back while the window flags change.
+        // Taking it out of the tabs first stops the layout briefly reparenting
+        // it back while the window flags change.
+        const int i = m_dockTabs->indexOf(win);
+        if (i >= 0)
+            m_dockTabs->removeTab(i);
         win->setParent(nullptr);
         win->setWindowFlag(Qt::Window, true);
-        win->resize(1000, 620);
+        win->resize(900, 560);
         win->show();
         win->raise();
+        hideDockPanelIfEmpty();
     }
 }
 
 void MainWindow::unregisterFilterWindow(FilterWindow *win)
 {
     m_filterWindows.removeAll(win);
+    const int i = m_dockTabs ? m_dockTabs->indexOf(win) : -1;
+    if (i >= 0) {
+        m_dockTabs->removeTab(i);
+        hideDockPanelIfEmpty();
+    }
+    // Every way a view can close -- its Close button, the window's own close
+    // box, the agent removing it -- ends here, so the agent's table of views
+    // can never hold one that is gone.
+    if (win->isAgentOwned() && m_agentViews.remove(win->agentId()) && m_agentPanel)
+        m_agentPanel->addActivity(tr("'s view \u201c%1\u201d was closed by you").arg(win->agentName()), {});
 }
 
 // --------------------------------------------------------- named configurations
@@ -1289,7 +1322,7 @@ void MainWindow::startAgentApi()
 {
     m_controlThread = new QThread(this);
     m_controlThread->setObjectName(QStringLiteral("agent-api"));
-    m_control = new ControlServer(m_bridge, this, this);
+    m_control = new ControlServer(m_bridge, this, this, !m_agentName.isEmpty());
     m_control->moveToThread(m_controlThread);
     connect(m_controlThread, &QThread::finished, m_control, &QObject::deleteLater);
     m_controlThread->start();
@@ -1339,13 +1372,115 @@ void MainWindow::appendAgentLine(const QString &text, const QString &color)
     m_terminal->appendLine(text, QColor(color), true);
 }
 
-void MainWindow::agentActivity(const QString &agent, const QString &sentence)
+void MainWindow::enterAgentMode(const QString &agent, bool tookOver)
 {
+    if (!m_agentName.isEmpty())
+        return;
+    m_agentName = agent;
     const QString who = agentDisplayName(agent);
-    appendAgentLine(QStringLiteral("◆ %1 %2").arg(who, sentence), App::TERM_AGENT);
-    m_agentLabel->setText(QStringLiteral("● %1 · %2")
+
+    // Said where it cannot be missed: the title bar, the status bar, and a
+    // tab of its own. Nothing the agent does from here on is out of sight.
+    setWindowTitle(tr("%1 - under %2's control").arg(App::NAME, who));
+    m_agentPanel = new AgentPanel(m_dockTabs);
+    m_agentPanel->setAgentName(who, tookOver);
+    m_agentPanel->setLineFetcher([this](const QVector<quint64> &seqs) { return agentLines(seqs); });
+    connect(m_agentPanel, &AgentPanel::saveReportRequested, this, &MainWindow::saveAgentReport);
+    m_dockTabs->insertTab(0, m_agentPanel, tr("%1 — findings").arg(who));
+    m_dockTabs->setCurrentWidget(m_agentPanel);
+    showDockPanel();
+
+    m_agentLabel->setText(tr("● %1 in control").arg(who));
+    m_agentLabel->show();
+    if (tookOver)
+        appendSystemMessage(tr("%1 took over this UartX; see the %1 tab for everything it reads")
+                                .arg(who),
+                            QColor(App::TERM_AGENT));
+}
+
+QStringList MainWindow::agentLines(const QVector<quint64> &seqs) const
+{
+    QStringList out;
+    const SessionSnapshot s = m_bridge->get();
+    if (!s.ring || seqs.isEmpty())
+        return out;
+    TextDecoder decoder;
+    decoder.setEncoding(s.encoding);
+    const QVector<LineRecord> span = s.ring->since(seqs.first(), int(seqs.last() - seqs.first() + 1));
+    if (span.isEmpty() || span.first().seq != seqs.first())
+        return out;     // aged out of memory
+    QSet<quint64> wanted(seqs.cbegin(), seqs.cend());
+    quint64 prev = 0;
+    for (const LineRecord &r : span) {
+        if (!wanted.contains(r.seq))
+            continue;
+        if (prev && r.seq != prev + 1)
+            out << QStringLiteral("  ⋯");
+        prev = r.seq;
+        const QString dir = r.dir == Direction::Rx ? QStringLiteral("RX")
+                          : r.dir == Direction::Tx ? QStringLiteral("TX") : QStringLiteral("SYS");
+        const QString text = r.dir == Direction::Sys ? QString::fromUtf8(r.bytes)
+                                                     : stripEscapeSequences(decoder.decode(r.bytes)).trimmed();
+        out << QStringLiteral("#%1 %2 %3 %4")
+                   .arg(r.seq)
+                   .arg(QDateTime::fromMSecsSinceEpoch(r.wallMs).toString(QStringLiteral("HH:mm:ss.zzz")),
+                        dir.leftJustified(3), text);
+    }
+    return out;
+}
+
+QString MainWindow::sessionLine() const
+{
+    const SessionSnapshot s = m_bridge->get();
+    return tr("Port %1 at %2 baud, session %3, %4 lines received.")
+        .arg(s.port.isEmpty() ? tr("(none)") : s.port, s.baud, s.id)
+        .arg(s.totalLines);
+}
+
+bool MainWindow::writeAgentReport(const QString &path, QString *error) const
+{
+    if (!m_agentPanel)
+        return false;
+    QSaveFile f(path);
+    if (!f.open(QIODevice::WriteOnly)) {
+        *error = f.errorString();
+        return false;
+    }
+    f.write(m_agentPanel->reportMarkdown(sessionLine()).toUtf8());
+    if (!f.commit()) {
+        *error = f.errorString();
+        return false;
+    }
+    return true;
+}
+
+void MainWindow::saveAgentReport()
+{
+    const QString dir = m_logState.created ? m_logState.sessionDir
+                                           : App::effectiveLogDir(m_state.settings.logDir);
+    const QString path = QFileDialog::getSaveFileName(
+        this, tr("Save Claude's report"), QDir(dir).filePath(QStringLiteral("claude-report.md")),
+        tr("Markdown (*.md);;Text (*.txt)"));
+    if (path.isEmpty())
+        return;
+    QString error;
+    if (writeAgentReport(path, &error))
+        showTemporaryNotice(tr("Report saved: %1").arg(QFileInfo(path).fileName()));
+    else
+        QMessageBox::warning(this, tr("Save report"), tr("Could not save the report: %1").arg(error));
+}
+
+void MainWindow::agentActivity(const QString &agent, const QString &sentence,
+                               const QVector<quint64> &seqs)
+{
+    // Listed in the agent's own tab, not the terminal: the terminal stays the
+    // device's, and the tab keeps the whole history in one place.
+    if (m_agentPanel)
+        m_agentPanel->addActivity(sentence, seqs);
+    const QString who = agentDisplayName(agent);
+    m_agentLabel->setText(QStringLiteral("● %1 in control · %2")
                               .arg(who, QTime::currentTime().toString(QStringLiteral("HH:mm:ss"))));
-    m_agentLabel->setToolTip(tr("Last action: %1").arg(sentence));
+    m_agentLabel->setToolTip(tr("Last action: %1 %2").arg(who, sentence));
     m_agentLabel->show();
 }
 
@@ -1404,11 +1539,19 @@ QJsonObject MainWindow::agentOpen(const QString &agent, const QJsonObject &p)
     const QString port = p.value("port").toString(m_state.settings.port).trimmed();
     const QString baud = p.value("baud").toString(m_state.settings.baud).trimmed();
     if (m_session) {
-        if (port.compare(m_state.settings.port, Qt::CaseInsensitive) == 0)
+        const bool samePort = port.compare(m_state.settings.port, Qt::CaseInsensitive) == 0;
+        if (samePort && baud == m_state.settings.baud)
             return QJsonObject{ { "session", m_session->id() }, { "port", m_state.settings.port },
                                 { "baud", m_state.settings.baud }, { "already", true } };
-        return agentError(QStringLiteral("PORT_BUSY"),
-                          tr("%1 is open in UartX; close it first").arg(m_state.settings.port));
+        if (!p.value("force").toBool())
+            return agentError(QStringLiteral("PORT_BUSY"),
+                              tr("%1 is open at %2 baud; add --force to close it and open %3 at %4")
+                                  .arg(m_state.settings.port, m_state.settings.baud, port, baud));
+        // Forced: the agent is in control, so it may close what is open and
+        // reopen what it needs. The log of the closed session is kept.
+        const QString was = QStringLiteral("%1 at %2").arg(m_state.settings.port, m_state.settings.baud);
+        onConnectClicked();    // closes the open session
+        agentActivity(agent, tr("closed %1 to reopen the port its own way").arg(was), {});
     }
     if (port.isEmpty())
         return agentError(QStringLiteral("NOT_FOUND"), tr("no port given and none selected"));
@@ -1447,9 +1590,16 @@ QJsonObject MainWindow::agentFilterAdd(const QString &agent, const QJsonObject &
     setFilterWindowDocked(win, true);
     win->backfill(recentDisplayLines(App::MAX_SCROLLBACK_LINES));
 
-    agentActivity(agent, tr("opened the view “%1” showing lines matching %2 (%3 already)")
-                             .arg(name, query.describe())
-                             .arg(win->shownCount()));
+    // The agent's reason, in plain words, leads; the pattern comes last for
+    // anyone who wants to check it.
+    const QString why = p.value("why").toString().trimmed().left(200);
+    QString sentence = tr("opened the view “%1” (%2 matching lines so far; pattern %3)")
+                           .arg(name)
+                           .arg(win->shownCount())
+                           .arg(query.describe());
+    if (!why.isEmpty())
+        sentence = QStringLiteral("%1 — %2").arg(why, sentence);
+    agentActivity(agent, sentence);
     return agentViewJson(win);
 }
 
@@ -1497,18 +1647,26 @@ QJsonObject MainWindow::agentAction(const QString &agent, const QString &method,
         const QString text = p.value("text").toString().trimmed().left(2000);
         if (text.isEmpty())
             return agentError(QStringLiteral("INVALID_PATTERN"), tr("a note needs text"));
-        // The explanation is the line a person who relies on the agent reads
-        // first, so it stands out -- and it goes into lines.log too, beside
-        // the data it explains.
+        // The explanation is what a person who relies on the agent reads
+        // first: it goes to the top of the findings tab, the tab comes to the
+        // front, a one-line marker shows where in the stream it was written,
+        // and the full text goes into lines.log beside the data it explains.
         const QString who = agentDisplayName(agent);
-        const QStringList paragraphs = text.split(QLatin1Char('\n'));
-        for (int i = 0; i < paragraphs.size(); ++i)
-            appendAgentLine((i == 0 ? QStringLiteral("\U0001F4AC %1: ").arg(who) : QStringLiteral("    "))
-                                + paragraphs[i],
-                            App::TERM_NOTE);
+        if (m_agentPanel) {
+            m_agentPanel->addFinding(text);
+            m_dockTabs->setCurrentWidget(m_agentPanel);
+        }
+        appendAgentLine(tr("\U0001F4AC %1 added a finding — see the %1 tab").arg(who), App::TERM_NOTE);
         if (m_session)
             m_session->recordSystem(QStringLiteral("note from %1: %2").arg(agent, text));
         return QJsonObject{ { "shown", true } };
+    }
+
+    if (method == QLatin1String("takeover")) {
+        if (!m_agentName.isEmpty())
+            return QJsonObject{ { "already", true }, { "agent", m_agentName } };
+        enterAgentMode(agent, true);
+        return QJsonObject{ { "tookOver", true }, { "agent", agent } };
     }
 
     return agentError(QStringLiteral("NOT_FOUND"), tr("unknown action '%1'").arg(method));

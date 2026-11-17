@@ -21,6 +21,7 @@ class QTimer;
 class QVBoxLayout;
 class QGroupBox;
 class QPushButton;
+class QScrollArea;
 
 /// Editor for a single text filter: label, the text to match, match-case.
 class TextFilterEditDialog : public QDialog
@@ -101,6 +102,8 @@ public:
     QString agentId() const { return m_agentId; }
     QString agentOwner() const { return m_agentOwner; }
     QString agentName() const { return m_agentName; }
+    /// The short name a tab shows.
+    QString tabTitle() const { return m_agentOwned ? QStringLiteral("AI \u00b7 ") + m_agentName : m_title; }
     const LineQuery &agentQuery() const { return m_agentQuery; }
     int shownCount() const { return m_shown; }
 
@@ -138,6 +141,7 @@ private:
     void setCount(const QString &text);
     void showTemporaryNotice(const QString &message);
     QString buildHeader() const;
+    void fitControlBar();
     int  checkedFilterIndex() const;   // the single ticked text filter, or -1
     QSet<QString> checkedNames(const QHash<QString, QCheckBox *> &boxes) const;
 
@@ -161,6 +165,7 @@ private:
     QTimer      *m_noticeTimer  = nullptr;
     QPushButton *m_dockBtn      = nullptr;
     QLabel      *m_titleLabel   = nullptr;
+    QScrollArea *m_barScroll    = nullptr;
     QWidget     *m_ruleBox      = nullptr;
     QWidget     *m_filterBox    = nullptr;
 

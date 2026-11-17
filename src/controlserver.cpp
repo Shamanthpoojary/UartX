@@ -67,6 +67,16 @@ QString seqRange(quint64 a, quint64 b)
     return a == b ? QStringLiteral("#%1").arg(a) : QStringLiteral("#%1–#%2").arg(a).arg(b);
 }
 
+/// The agent's stated reason, when it gave one, leads the sentence: "to find
+/// failed commands" means something to anyone; a regex does not.
+QString withWhy(const QJsonObject &p, const QString &sentence)
+{
+    const QString why = p.value(QStringLiteral("why")).toString().trimmed().left(200);
+    if (why.isEmpty())
+        return sentence;
+    return QStringLiteral("%1 — %2").arg(why, sentence);
+}
+
 QString plural(qint64 n, const QString &one, const QString &many)
 {
     return QStringLiteral("%1 %2").arg(QLocale().toString(n), n == 1 ? one : many);
@@ -102,6 +112,7 @@ struct ControlServer::Wait
     QPointer<QLocalSocket> socket;
     QJsonValue  id;
     QString     agent;
+    QJsonObject params;
     LineQuery   query;
     int         before = 10;
     int         after = 20;
@@ -118,10 +129,11 @@ struct ControlServer::Wait
 };
 
 ControlServer::ControlServer(std::shared_ptr<AgentBridge> bridge, AgentHost *host,
-                             QObject *hostObject)
+                             QObject *hostObject, bool agentMode)
     : m_bridge(std::move(bridge))
     , m_host(host)
     , m_hostObject(hostObject)
+    , m_agentMode(agentMode)
 {
 }
 
@@ -172,6 +184,7 @@ void ControlServer::start()
     rt["protocol"] = PROTOCOL;
     rt["version"]  = App::VERSION;
     rt["token"]    = m_token;
+    rt["mode"]     = m_agentMode ? QStringLiteral("agent") : QStringLiteral("plain");
     QDir().mkpath(App::configDir());
     QSaveFile f(runtimeFilePath());
     if (f.open(QIODevice::WriteOnly)) {
@@ -288,7 +301,8 @@ void ControlServer::handle(QLocalSocket *socket, const QJsonObject &req)
         if (!agent.isEmpty())
             c.agent = agent.left(32);
         reply(socket, id, QJsonObject{ { "protocol", PROTOCOL }, { "app", App::NAME },
-                                       { "version", App::VERSION }, { "agent", c.agent } });
+                                       { "version", App::VERSION }, { "agent", c.agent },
+                                       { "mode", m_agentMode ? "agent" : "plain" } });
         return;
     }
     if (!c.authed) {
@@ -296,10 +310,32 @@ void ControlServer::handle(QLocalSocket *socket, const QJsonObject &req)
         return;
     }
 
+    if (method == QLatin1String("takeover")) {
+        // The user opened this UartX; the agent is taking it over. The window
+        // says so, loudly, before a single line is read.
+        const QJsonObject r = callHost(c.agent, method, p);
+        if (!r.contains(QStringLiteral("error")))
+            m_agentMode = true;
+        reply(socket, id, r);
+        return;
+    }
+    if (method == QLatin1String("status")) {
+        QJsonObject s = doStatus();
+        s["mode"] = m_agentMode ? QStringLiteral("agent") : QStringLiteral("plain");
+        reply(socket, id, s);
+        return;
+    }
+    if (!m_agentMode) {
+        fail(socket, id, QStringLiteral("AGENT_OFF"),
+             QStringLiteral("this UartX was opened by the user and is not under agent control; "
+                            "run `uartx-ctl launch` to take it over (the user will see that you did)"));
+        return;
+    }
+
     if (method == QLatin1String("status"))
         reply(socket, id, doStatus());
     else if (method == QLatin1String("summary"))
-        reply(socket, id, doSummary(c.agent));
+        reply(socket, id, doSummary(c.agent, p));
     else if (method == QLatin1String("tail"))
         reply(socket, id, doTail(c.agent, p));
     else if (method == QLatin1String("search"))
@@ -332,12 +368,14 @@ QJsonObject ControlServer::callHost(const QString &agent, const QString &method,
     return result;
 }
 
-void ControlServer::activity(const QString &agent, const QString &sentence)
+void ControlServer::activity(const QString &agent, const QString &sentence,
+                             const QVector<quint64> &seqs)
 {
     if (!m_hostObject)
         return;
     AgentHost *host = m_host;
-    QMetaObject::invokeMethod(m_hostObject, [host, agent, sentence] { host->agentActivity(agent, sentence); },
+    QMetaObject::invokeMethod(m_hostObject,
+                              [host, agent, sentence, seqs] { host->agentActivity(agent, sentence, seqs); },
                               Qt::QueuedConnection);
 }
 
@@ -396,7 +434,7 @@ QJsonObject ControlServer::doStatus()
     return QJsonObject{ { "app", App::NAME }, { "version", App::VERSION }, { "session", session } };
 }
 
-QJsonObject ControlServer::doSummary(const QString &agent)
+QJsonObject ControlServer::doSummary(const QString &agent, const QJsonObject &p)
 {
     const SessionSnapshot s = m_bridge->get();
     if (!s.ring)
@@ -433,8 +471,8 @@ QJsonObject ControlServer::doSummary(const QString &agent)
             ++recent;
     }
 
-    activity(agent, QStringLiteral("asked for a summary of %1 (counts only, no log lines sent)")
-                        .arg(plural(all.size(), QStringLiteral("line"), QStringLiteral("lines"))));
+    activity(agent, withWhy(p, QStringLiteral("asked for a summary of %1 (counts only, no log lines sent)")
+                                   .arg(plural(all.size(), QStringLiteral("line"), QStringLiteral("lines")))));
     QJsonObject o;
     o["port"] = s.port;
     o["open"] = s.open;
@@ -467,14 +505,18 @@ QJsonObject ControlServer::doTail(const QString &agent, const QJsonObject &p)
             picked.prepend(*it);
 
     QJsonArray lines;
-    for (const LineRecord &r : picked)
+    QVector<quint64> seqs;
+    for (const LineRecord &r : picked) {
         lines.append(lineJson(r, s));
+        seqs.append(r.seq);
+    }
     if (!picked.isEmpty())
-        activity(agent, QStringLiteral("read the last %1%2 (%3)")
+        activity(agent, withWhy(p, QStringLiteral("read the last %1%2 (%3)")
                             .arg(plural(picked.size(), QStringLiteral("line"), QStringLiteral("lines")),
                                  q.pattern().isEmpty() ? QString()
                                                        : QStringLiteral(" matching ") + q.describe(),
-                                 seqRange(picked.first().seq, picked.last().seq)));
+                                 seqRange(picked.first().seq, picked.last().seq))),
+                 seqs);
     return { { "lines", lines } };
 }
 
@@ -515,6 +557,7 @@ QJsonObject ControlServer::doSearch(const QString &agent, const QJsonObject &p)
             take[i] = true;
     }
     QJsonArray lines;
+    QVector<quint64> sentSeqs;
     int sent = 0, cutForBudget = 0;
     quint64 firstSent = 0, lastSent = 0, prevSeq = 0;
     for (int i = 0; i < all.size(); ++i) {
@@ -532,13 +575,14 @@ QJsonObject ControlServer::doSearch(const QString &agent, const QJsonObject &p)
             o["gapBefore"] = true;
         prevSeq = all[i].seq;
         lines.append(o);
+        sentSeqs.append(all[i].seq);
         if (!firstSent)
             firstSent = all[i].seq;
         lastSent = all[i].seq;
         ++sent;
     }
 
-    activity(agent, total
+    activity(agent, withWhy(p, total
                         ? QStringLiteral("searched for %1: %2, sent %3 (%4)")
                               .arg(q.describe(),
                                    plural(total, QStringLiteral("match"), QStringLiteral("matches")),
@@ -546,7 +590,8 @@ QJsonObject ControlServer::doSearch(const QString &agent, const QJsonObject &p)
                                    seqRange(firstSent, lastSent))
                         : QStringLiteral("searched for %1: no matches in the last %2")
                               .arg(q.describe(), plural(all.size(), QStringLiteral("line"),
-                                                        QStringLiteral("lines"))));
+                                                        QStringLiteral("lines")))),
+             sentSeqs);
     QJsonObject o;
     o["pattern"] = q.describe();
     o["matches"] = total;
@@ -571,6 +616,7 @@ bool ControlServer::startWait(QLocalSocket *socket, const QJsonValue &id, const 
     w->socket = socket;
     w->id = id;
     w->agent = agent;
+    w->params = p;
     w->before = intParam(p, "before", 10, 0, MAX_CONTEXT);
     w->after = intParam(p, "after", 20, 0, MAX_CONTEXT * 2);
     w->timeoutMs = qBound<qint64>(1000, qint64(p.value("timeoutMs").toDouble(30000)), 24LL * 3600 * 1000);
@@ -582,9 +628,9 @@ bool ControlServer::startWait(QLocalSocket *socket, const QJsonValue &id, const 
     w->nextSeq = s.ring ? s.ring->lastSeq() + 1 : 1;
     w->quiet.start();
     m_waits.append(w);
-    activity(agent, QStringLiteral("is waiting for %1 (up to %2 s); nothing is sent until it appears")
-                        .arg(w->query.describe())
-                        .arg(w->timeoutMs / 1000));
+    activity(agent, withWhy(p, QStringLiteral("is waiting for %1 (up to %2 s); nothing is sent until it appears")
+                                   .arg(w->query.describe())
+                                   .arg(w->timeoutMs / 1000)));
     return true;
 }
 
@@ -639,7 +685,9 @@ void ControlServer::pollWaits()
             const int count = qMin(MAX_LINES_PER_RESPONSE, w->before + 1 + w->afterSeen);
             const QVector<LineRecord> window = w->ring->since(from, count);
             QJsonArray lines;
+            QVector<quint64> seqs;
             for (const LineRecord &r : window) {
+                seqs.append(r.seq);
                 QJsonObject o = lineJson(r, s);
                 if (r.seq == w->hitSeq)
                     o["hit"] = true;
@@ -653,7 +701,7 @@ void ControlServer::pollWaits()
             result["lines"] = lines;
             reply(w->socket, w->id, result);
             const quint64 last = window.isEmpty() ? w->hitSeq : window.last().seq;
-            activity(w->agent, w->sysEvent
+            activity(w->agent, withWhy(w->params, w->sysEvent
                                    ? QStringLiteral("was woken by a session event at #%1; sent %2 (%3)")
                                          .arg(w->hitSeq)
                                          .arg(plural(lines.size(), QStringLiteral("line"), QStringLiteral("lines")),
@@ -663,7 +711,8 @@ void ControlServer::pollWaits()
                                          .arg(w->hitSeq)
                                          .arg(w->hits > 1 ? QStringLiteral(" (×%1)").arg(w->hits) : QString(),
                                               plural(lines.size(), QStringLiteral("line"), QStringLiteral("lines")),
-                                              seqRange(from, last)));
+                                              seqRange(from, last))),
+                     seqs);
             m_waits.remove(wi);
             continue;
         }

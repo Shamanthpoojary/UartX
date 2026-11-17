@@ -30,6 +30,8 @@ class QWidget;
 class QTimer;
 class QAction;
 class Session;
+class AgentPanel;
+class QTabWidget;
 class ControlServer;
 class QThread;
 
@@ -41,7 +43,10 @@ class MainWindow : public QMainWindow, public AgentHost
     Q_OBJECT
 
 public:
-    explicit MainWindow(QWidget *parent = nullptr);
+    /// `agentName` non-empty: UartX was started by that AI agent (through
+    /// `uartx-ctl launch`) and opens under its control, with the Claude panel.
+    /// Empty: a plain UART logger, until an agent takes it over.
+    explicit MainWindow(const QString &agentName = QString(), QWidget *parent = nullptr);
     ~MainWindow() override;
 
     // --- shared state used by the dialogs and the Filter windows ---
@@ -77,13 +82,14 @@ public:
     // --- AgentHost: what an agent may ask the window to do ---
     QJsonObject agentAction(const QString &agent, const QString &method,
                             const QJsonObject &params) override;
-    void agentActivity(const QString &agent, const QString &sentence) override;
+    void agentActivity(const QString &agent, const QString &sentence,
+                       const QVector<quint64> &seqs = {}) override;
 
-    /// Moves a filter view between the splitter and its own window.
+    /// Moves a filter view between the side panel and its own window.
     ///
-    /// The splitter holds at most one filter view: several side by side leave
-    /// every one of them too narrow to read, which is the opposite of what
-    /// docking is for. Docking a second view pops the first one out.
+    /// Docked views are tabs in one panel beside the terminal, so any number
+    /// of them share a single slice of the screen instead of each taking a
+    /// share of the terminal's width.
     void setFilterWindowDocked(FilterWindow *win, bool docked);
     QStringList knownPorts() const { return m_knownPorts; }
 
@@ -153,6 +159,13 @@ private:
     QJsonObject agentOpen(const QString &agent, const QJsonObject &p);
     QJsonObject agentFilterAdd(const QString &agent, const QJsonObject &p);
     QJsonObject agentViewJson(const FilterWindow *win) const;
+    void enterAgentMode(const QString &agent, bool tookOver);
+    QStringList agentLines(const QVector<quint64> &seqs) const;
+    QString sessionLine() const;
+    void saveAgentReport();
+    bool writeAgentReport(const QString &path, QString *error) const;
+    void showDockPanel();
+    void hideDockPanelIfEmpty();
 
     void updateStatusLine();
     void showTemporaryNotice(const QString &message);
@@ -191,10 +204,11 @@ private:
     QSplitter *m_splitter = nullptr;
     QVector<FilterWindow *> m_filterWindows;
 
-    /// The filter view currently sitting in the splitter, or nullptr.
-    /// Read from the splitter itself rather than from a flag, so it cannot
-    /// drift out of step with where the widgets actually are.
-    FilterWindow *dockedFilterWindow() const;
+    /// The side panel: the Claude tab (when an agent is in control) and every
+    /// docked filter view, as tabs.
+    QTabWidget *m_dockTabs = nullptr;
+    AgentPanel *m_agentPanel = nullptr;
+    QString     m_agentName;            ///< empty until an agent is in control
 
     // ---- widgets ----
     RibbonBar    *m_ribbon         = nullptr;

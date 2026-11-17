@@ -54,7 +54,16 @@ int main(int argc, char *argv[])
         QApplication::processEvents();
     }
 
-    MainWindow window;
+    // `--agent NAME` is how `uartx-ctl launch` starts UartX for an AI agent:
+    // the window then opens under that agent's control, with its findings tab.
+    // Started any other way, UartX is a plain UART logger.
+    QString agent;
+    const QStringList args = QCoreApplication::arguments();
+    const int at = args.indexOf(QStringLiteral("--agent"));
+    if (at > 0 && at + 1 < args.size())
+        agent = args.at(at + 1).trimmed().left(32);
+
+    MainWindow window(agent);
 
     // Whatever building the window already consumed counts towards the
     // interval, so a slow machine waits less rather than more. A fast one

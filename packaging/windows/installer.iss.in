@@ -47,17 +47,26 @@ Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
 ShowLanguageDialog=no
+; uartx-ctl goes on PATH so an AI agent can run it by name.
+ChangesEnvironment=yes
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+Name: "addtopath"; Description: "Add uartx-ctl to PATH (lets AI agents such as Claude Code control UartX)"; GroupDescription: "AI agent support:"
+Name: "claudeskill"; Description: "Install the UartX skill for Claude Code (teaches it to read UART logs through UartX)"; GroupDescription: "AI agent support:"
 
 [Files]
 ; The staged tree is the executable plus every Qt runtime file windeployqt
 ; pulled in, so the target machine needs no Qt installation.
 Source: "{#StageDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Claude Code looks for personal skills in ~/.claude/skills/<name>/SKILL.md.
+Source: "{#SourceDir}\skills\uartx\SKILL.md"; DestDir: "{%USERPROFILE}\.claude\skills\uartx"; Flags: ignoreversion; Tasks: claudeskill
+
+[Registry]
+Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; ValueData: "{olddata};{app}"; Check: NeedsAddPath(ExpandConstant('{app}')); Tasks: addtopath
 
 [Icons]
 Name: "{group}\{#MyAppName}";              Filename: "{app}\{#MyAppExeName}"
@@ -70,3 +79,37 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChang
 [UninstallDelete]
 ; Qt writes nothing else here, but a stray plugin cache should not be left behind.
 Type: dirifempty; Name: "{app}"
+
+[Code]
+{ True when the folder is not on the user's PATH yet, so reinstalling does
+  not add it twice. }
+function NeedsAddPath(Dir: string): Boolean;
+var
+  Current: string;
+begin
+  if not RegQueryStringValue(HKEY_CURRENT_USER, 'Environment', 'Path', Current) then
+  begin
+    Result := True;
+    exit;
+  end;
+  Result := Pos(';' + Uppercase(Dir) + ';', ';' + Uppercase(Current) + ';') = 0;
+end;
+
+{ Uninstalling takes the folder back off PATH. }
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  Current, Dir: string;
+  P: Integer;
+begin
+  if CurUninstallStep <> usPostUninstall then
+    exit;
+  if not RegQueryStringValue(HKEY_CURRENT_USER, 'Environment', 'Path', Current) then
+    exit;
+  Dir := ExpandConstant('{app}');
+  P := Pos(';' + Uppercase(Dir), Uppercase(Current));
+  if P > 0 then
+  begin
+    Delete(Current, P, Length(Dir) + 1);
+    RegWriteExpandStringValue(HKEY_CURRENT_USER, 'Environment', 'Path', Current);
+  end;
+end;
