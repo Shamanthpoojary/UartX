@@ -43,7 +43,7 @@ void Pipeline::registerMetaTypes()
 
 Pipeline::Pipeline(int ringCapacity, QObject *parent)
     : QObject(parent)
-    , m_ring(std::make_unique<RecentRing>(ringCapacity))
+    , m_ring(std::make_shared<RecentRing>(ringCapacity))
 {
     registerMetaTypes();
 }

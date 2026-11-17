@@ -124,6 +124,12 @@ inline const QString TERM_WARN      = QStringLiteral("#d7a65f");
 // The log has stopped writing -- the one system message that must not be
 // missed.
 inline const QString TERM_ERROR     = QStringLiteral("#ff6b6b");
+// What an AI agent did -- its reads, its views -- in a colour of its own, so
+// the user can tell at a glance which lines are the device and which are the
+// agent talking about it.
+inline const QString TERM_AGENT     = QStringLiteral("#b392f0");
+// An agent's plain-language explanation: the line meant to be read first.
+inline const QString TERM_NOTE      = QStringLiteral("#7ee0c3");
 // Transmitted data gets its own subtle shade so it reads as distinct from
 // device output without shouting.
 inline const QString TERM_TX        = QStringLiteral("#7f93a8");

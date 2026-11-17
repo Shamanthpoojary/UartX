@@ -97,8 +97,10 @@ public:
     /// call before the first cross-thread invocation.
     static void registerMetaTypes();
 
-    /// Readable from any thread.
+    /// Readable from any thread. Shared, so a reader on another thread -- the
+    /// agent API -- keeps the ring alive even after the session closes.
     const RecentRing &recent() const { return *m_ring; }
+    std::shared_ptr<const RecentRing> ring() const { return m_ring; }
 
     /// The GUI calls this once a batch is drawn, so the next may be sent.
     void markBatchRendered() { m_batchInFlight.store(false); }
@@ -149,7 +151,7 @@ private:
     LineAssembler  m_assembler;
     TextDecoder    m_decoder;
     LogStore       m_log;
-    std::unique_ptr<RecentRing> m_ring;
+    std::shared_ptr<RecentRing> m_ring;
     QTimer        *m_timer = nullptr;
 
     quint64 m_nextSeq = 1;

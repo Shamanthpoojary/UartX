@@ -179,6 +179,7 @@ FilterWindow::FilterWindow(MainWindow *app, const QString &title)
 
     // ------------------------------------------------------- colour rules
     auto *ruleBox = new QGroupBox(tr("Color rules"), this);
+    m_ruleBox = ruleBox;
     auto *ruleOuter = new QVBoxLayout(ruleBox);
     ruleOuter->setContentsMargins(10, 6, 10, 8);
     ruleOuter->addWidget(makeCheckList(ruleBox, &m_ruleLayout));
@@ -186,6 +187,7 @@ FilterWindow::FilterWindow(MainWindow *app, const QString &title)
 
     // -------------------------------------------------------- text filters
     auto *filterBox = new QGroupBox(tr("Text filters"), this);
+    m_filterBox = filterBox;
     auto *filterOuter = new QHBoxLayout(filterBox);
     filterOuter->setContentsMargins(10, 6, 10, 8);
     filterOuter->setSpacing(10);
@@ -388,8 +390,49 @@ int FilterWindow::checkedFilterIndex() const
 
 // --------------------------------------------------------------- filtering
 
+void FilterWindow::makeAgentView(const QString &owner, const QString &id, const QString &name,
+                                 const LineQuery &query)
+{
+    m_agentOwned = true;
+    m_agentOwner = owner;
+    m_agentId = id;
+    m_agentName = name;
+    m_agentQuery = query;
+
+    // An agent's view is defined by its query, not by the user's checklists,
+    // so those are hidden rather than left there doing nothing.
+    m_ruleBox->hide();
+    m_filterBox->hide();
+
+    const QString who = owner.left(1).toUpper() + owner.mid(1);
+    m_title = QStringLiteral("%1: %2").arg(who, name);
+    setWindowTitle(QStringLiteral("%1 - %2").arg(m_title, App::NAME));
+    // The badge says, at a glance, that the user did not make this view.
+    m_titleLabel->setTextFormat(Qt::RichText);
+    m_titleLabel->setText(
+        QStringLiteral("<span style='background:#6f42c1; color:white; padding:1px 5px;"
+                       " border-radius:3px;'>&nbsp;AI&nbsp;</span>&nbsp; <b>%1</b>"
+                       " &nbsp;<span style='color:#8a8a8a;'>%2 · view %3</span>")
+            .arg(m_title.toHtmlEscaped(), query.describe().toHtmlEscaped(), id.toHtmlEscaped()));
+    m_titleLabel->setToolTip(tr("Opened by %1. It shows only the lines matching %2.\n"
+                                "You can search, save, undock or close it; closing it tells %1.")
+                                 .arg(who, query.describe()));
+}
+
+void FilterWindow::backfill(const QVector<DisplayLine> &lines)
+{
+    m_text->beginBatch();
+    for (const DisplayLine &line : lines)
+        if (matches(line))
+            append(line);
+    m_text->endBatch();
+}
+
 bool FilterWindow::matches(const DisplayLine &record) const
 {
+    if (m_agentOwned)
+        return m_agentQuery.matches(record.raw);
+
     const QSet<QString> rules   = checkedNames(m_ruleBoxes);
     const QSet<QString> filters = checkedNames(m_filterBoxes);
 
@@ -627,6 +670,10 @@ QString FilterWindow::buildHeader() const
 
     QString h;
     h += QStringLiteral("===== %1 %2 - filtered output =====\n").arg(App::NAME, App::VERSION);
+    if (m_agentOwned) {
+        h += QStringLiteral("View          : %1 (opened by %2)\n").arg(m_title, m_agentOwner);
+        h += QStringLiteral("Shows         : lines matching %1\n").arg(m_agentQuery.describe());
+    }
     h += QStringLiteral("Saved         : %1\n")
              .arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss")));
     h += QStringLiteral("Source        : %1 @ %2 baud\n")
