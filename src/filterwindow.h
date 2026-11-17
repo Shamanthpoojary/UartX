@@ -85,7 +85,7 @@ public:
 
     /// Live feed from the main window (upcoming data only). Matching uses the
     /// record's raw text, so filters keep working in any display mode.
-    void onLine(const LineRecord &record);
+    void onLine(const DisplayLine &record);
 
     /// Rebuilds both selection lists after the rules or filters change.
     void refreshSources(const ColorRuleSet &rules, const TextFilterSet &filters);
@@ -111,8 +111,8 @@ private slots:
     void findPrevious();
 
 private:
-    bool matches(const LineRecord &record) const;
-    void append(const LineRecord &record);
+    bool matches(const DisplayLine &record) const;
+    void append(const DisplayLine &record);
     void runSearch(bool backwards, bool fromCursor);
     void updateSearchStatus();
     void updateDockButton();

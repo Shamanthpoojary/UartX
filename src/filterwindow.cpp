@@ -388,7 +388,7 @@ int FilterWindow::checkedFilterIndex() const
 
 // --------------------------------------------------------------- filtering
 
-bool FilterWindow::matches(const LineRecord &record) const
+bool FilterWindow::matches(const DisplayLine &record) const
 {
     const QSet<QString> rules   = checkedNames(m_ruleBoxes);
     const QSet<QString> filters = checkedNames(m_filterBoxes);
@@ -419,13 +419,13 @@ bool FilterWindow::matches(const LineRecord &record) const
     return false;
 }
 
-void FilterWindow::onLine(const LineRecord &record)
+void FilterWindow::onLine(const DisplayLine &record)
 {
     if (matches(record))
         append(record);
 }
 
-void FilterWindow::append(const LineRecord &record)
+void FilterWindow::append(const DisplayLine &record)
 {
     if (!record.spans.isEmpty())
         m_text->appendSpans(record.prefix, QColor(App::TERM_META),
