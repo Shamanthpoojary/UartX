@@ -158,12 +158,35 @@ Under *Settings > Terminal*, off until you turn them on:
 | --- | --- |
 | Timestamps | prefixes each line with its arrival time, to the millisecond |
 | RX / TX indicators | labels each line with its direction |
-| Display data as | shows traffic as ASCII, HEX, or HEX + ASCII side by side |
+| Display data as | shows traffic as ASCII, Escaped (control bytes spelled out as `\r`, `\x1b`…), HEX, or HEX + ASCII side by side |
 | Use the colors the device sends | obeys ANSI colour codes in the incoming data |
 
 These affect the display only. The session log always records the raw UART
-data, and colour rules and filters always match the raw text, so switching to
-hex never changes which lines match.
+data, and colour rules and filters always match the decoded text with escape
+sequences removed, so switching to hex never changes which lines match.
+
+### Line framing and text encoding
+
+Under *Settings > Serial port*, applied the next time the port is opened:
+
+| Setting | Choices |
+| --- | --- |
+| Line framing | **Auto** (CR, LF, CRLF and LFCR each end a line) · Custom terminator (any bytes, e.g. `;` or `\x03`) · Idle gap (a pause ends a record — for binary protocols) · Fixed length · None |
+| Text encoding | **Auto** · UTF-8 · Latin-1 · Windows-1252, plus GBK, Shift_JIS and other legacy codecs where your Qt build provides them |
+
+**Auto** encoding shows valid UTF-8 (which includes plain ASCII) as text and
+any other byte as `‹xNN›` in place, so binary data and a wrong baud rate look
+like what they are instead of silently turning into question marks. A line
+that never ends is cut at 4 KB, and a line that goes quiet without ending is
+shown after 250 ms and completed in place when the rest arrives; filter
+windows receive it once, complete.
+
+### When the device is faster than the screen
+
+Reading, logging and matching run on their own thread; the window only draws.
+If the device sends faster than the screen can be redrawn, the terminal skips
+ahead and says so — `… 12,408 lines not displayed (all saved to log) …` —
+while the log keeps every line.
 
 **Device colours.** Firmware that colours its own output with ANSI codes is
 shown in those colours rather than having them stripped. Where one of your
@@ -178,8 +201,33 @@ choose a destination folder — leave it blank to use the default location. The
 dialog confirms whether the folder is writable, and UartX reports a clear
 error rather than connecting if the location cannot be used.
 
-A new file is created each time the port is opened. The file name accepts
-these placeholders:
+Each time the port is opened UartX starts a new **session folder** in the log
+folder. Nothing is created until the first byte arrives, so a session that
+receives nothing leaves nothing behind.
+
+```
+uartx_2026-11-17_COM5_143205_s1/
+  session.json      port, the settings it was opened with, and its runs
+  run-001/
+    raw.log         the exact bytes received — nothing added, nothing changed
+    lines.log       one line per record:  seq <TAB> time <TAB> direction/origin <TAB> text
+    lines.idx       an index into lines.log, so any line can be found instantly
+```
+
+- **raw.log** is byte-for-byte what the device sent, line endings included.
+  (Until 1.3 every line ending was rewritten as LF; it no longer is.)
+- **lines.log** numbers every record — received lines, what you sent, and
+  UartX's own notes such as connects and disconnects — and stamps it with the
+  time the computer received it, e.g.
+  `5543  2026-11-17T14:32:05.123+05:30  RX/device  E/I2C: timeout addr=0x3c`.
+  Control bytes and anything that is not valid UTF-8 are spelled out (`\x1b`,
+  `\xff`), so the file is plain text that any editor or `grep` can read. Past
+  256 MB it continues in `lines.2.log`, `lines.3.log`, …
+- Times are when the computer received the data. USB serial adapters deliver
+  in packets, so every line in one packet shares a time; order is always by
+  the sequence number.
+
+The session folder name accepts these placeholders:
 
 | Placeholder | Meaning |
 | --- | --- |
@@ -189,9 +237,20 @@ these placeholders:
 | `&T` | time (HHMMSS) |
 | `&H` | the port name |
 
-Default: `uartx_&Y-&M-&D_&H_&T.log`. The log holds the data received from the
-device and nothing else: no timestamps, direction markers, hex formatting or
-colours, and no data you sent.
+Default: `uartx_&Y-&M-&D_&H_&T` (a trailing `.log` from older settings is
+dropped), followed by the session number.
+
+**How long logs are kept.** *Keep logs for* defaults to **12 hours and at most
+1 GB**; choose anything from 1 hour to forever, and a size cap up to no limit.
+Cleanup runs at startup and every hour, oldest sessions first. The session that
+is open is never removed — if it alone grows past the size cap, UartX warns
+you and deletes nothing — and nothing in the log folder that is not a UartX
+session folder (logs from 1.3, your own files) is ever touched. The policy is
+shown in the status bar.
+
+**If the disk fills up** or the folder becomes unwritable, UartX keeps showing
+the data, marks the status bar `log: STOPPED`, and prints the reason in red in
+the terminal.
 
 ## 7. Manage configurations
 

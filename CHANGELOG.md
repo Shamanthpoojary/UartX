@@ -6,6 +6,52 @@ All notable changes to UartX are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **Reading, logging and matching moved off the window's thread.** Each
+  connection now has its own pipeline thread that frames the bytes into lines,
+  decodes them, matches colour rules and writes the log; the window only draws
+  what it is handed every 40 ms. If the device outruns the screen, the terminal
+  shows `… N lines not displayed (all saved to log) …` instead of falling
+  behind, and the log still records every line.
+- **Logs are now a folder per session**: `raw.log` (exact bytes),
+  `lines.log` (numbered, timestamped records, including what you sent and
+  connect/disconnect events), `lines.idx` (index) and `session.json`.
+  `lines.log` rolls over to `lines.2.log` at 256 MB.
+- **`raw.log` is byte-exact.** Until 1.3 every line ending in the log was
+  rewritten as LF. Line endings are now kept as the device sent them.
+- The log-name template now names the session folder; the *Append* option is
+  gone, since every session has a folder of its own.
+- Colour rules and filters match the decoded text with ANSI escape sequences
+  removed, so a rule for `ERROR` also matches a device that colours the word.
+- Text you send is encoded with the session's encoding (UTF-8 by default)
+  instead of Latin-1, so characters outside Latin-1 are no longer sent as `?`.
+
+### Added
+
+- **Log retention**: keep logs for 1 hour to forever (default 12 hours) and up
+  to a size cap (default 1 GB). Cleanup runs at startup and hourly, oldest
+  first, never touches the open session or anything UartX did not create, and
+  warns instead of deleting when the open session alone exceeds the cap.
+- **Line framing** options: custom terminator, idle gap (binary protocols),
+  fixed length, or none, beside the default CR/LF handling. Lines without a
+  terminator are cut at 4 KB.
+- **Text encoding** options: Auto (UTF-8, with any other byte shown as
+  `‹xNN›`), UTF-8, Latin-1, Windows-1252, and legacy codecs where the Qt build
+  supports them.
+- **Escaped** display mode, spelling out control bytes (`\r`, `\x1b`).
+- The status bar shows the line count and the log retention policy; a log
+  that stops writing (disk full, folder gone) is reported in red and the
+  session carries on.
+- Automated tests (Qt Test, run by CI on all three platforms) for framing,
+  decoding, the log store, retention and a 200,000-line pipeline stress test.
+
+### Fixed
+
+- A line shown early because the device paused mid-line was never delivered
+  to filter windows, and its remainder was matched as a separate line. Filter
+  windows now receive such a line once, complete.
+
 ## [1.3.0] - 2026-10-13
 
 ### Added
