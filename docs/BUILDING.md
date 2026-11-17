@@ -252,7 +252,7 @@ existing installation in place rather than leaving two entries behind.
 Silent install, for scripted rollout:
 
 ```
-UartX-1.3.0-setup.exe /VERYSILENT /SUPPRESSMSGBOXES
+UartX-1.4.0-setup.exe /VERYSILENT /SUPPRESSMSGBOXES
 ```
 
 ## Regenerating the icons
@@ -345,7 +345,7 @@ Sign both the executable and the setup program, in that order:
 
 ```
 signtool sign /f cert.pfx /p <password> /tr http://timestamp.digicert.com /td sha256 /fd sha256 UartX.exe
-signtool sign /f cert.pfx /p <password> /tr http://timestamp.digicert.com /td sha256 /fd sha256 UartX-1.3.0-setup.exe
+signtool sign /f cert.pfx /p <password> /tr http://timestamp.digicert.com /td sha256 /fd sha256 UartX-1.4.0-setup.exe
 ```
 
 `signtool` ships with the Windows SDK.

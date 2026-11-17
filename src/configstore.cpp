@@ -1,5 +1,7 @@
 #include "configstore.h"
 #include "lineformat.h"
+#include "lineassembler.h"
+#include "textdecoder.h"
 
 #include <QFile>
 #include <QSaveFile>
@@ -30,6 +32,13 @@ QJsonObject AppSettings::toJson() const
     o["parity"]         = parity;
     o["stopbits"]       = stopbits;
     o["flow"]           = flow;
+    o["framing"]        = framing;
+    o["frameTerminator"] = frameTerminator;
+    o["frameIdleMs"]    = frameIdleMs;
+    o["frameFixedLength"] = frameFixedLength;
+    o["encoding"]       = encoding;
+    o["retentionSecs"]  = double(retentionSecs);
+    o["retentionBytes"] = double(retentionBytes);
     o["logEnabled"]     = logEnabled;
     o["logDir"]         = logDir;
     o["logTemplate"]    = logTemplate;
@@ -57,6 +66,19 @@ AppSettings AppSettings::fromJson(const QJsonObject &o)
     s.parity         = o.value("parity").toString(s.parity);
     s.stopbits       = o.value("stopbits").toString(s.stopbits);
     s.flow           = o.value("flow").toString(s.flow);
+    s.framing        = o.value("framing").toString(s.framing);
+    if (!Framing::modeNames().contains(s.framing))
+        s.framing = Framing::modeNames().first();
+    s.frameTerminator = o.value("frameTerminator").toString(s.frameTerminator);
+    s.frameIdleMs    = qBound(1, o.value("frameIdleMs").toInt(s.frameIdleMs), 60000);
+    s.frameFixedLength = qBound(1, o.value("frameFixedLength").toInt(s.frameFixedLength), 4096);
+    s.encoding       = o.value("encoding").toString(s.encoding);
+    // A codec this build lacks -- a config carried over from another
+    // platform -- falls back to Auto rather than failing.
+    if (!TextDecoder::available().contains(s.encoding))
+        s.encoding = QStringLiteral("Auto");
+    s.retentionSecs  = qMax<qint64>(0, qint64(o.value("retentionSecs").toDouble(double(s.retentionSecs))));
+    s.retentionBytes = qMax<qint64>(0, qint64(o.value("retentionBytes").toDouble(double(s.retentionBytes))));
     s.logEnabled     = o.value("logEnabled").toBool(s.logEnabled);
     s.logDir         = o.value("logDir").toString(s.logDir);
     s.logTemplate    = o.value("logTemplate").toString(s.logTemplate);

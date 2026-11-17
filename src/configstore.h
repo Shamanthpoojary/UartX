@@ -20,11 +20,23 @@ struct AppSettings
     QString stopbits = QStringLiteral("1");
     QString flow     = QStringLiteral("None");
 
+    // --- framing and decoding (applied when the port is opened) ---
+    QString framing          = QStringLiteral("Auto (CR / LF / CRLF)");
+    QString frameTerminator;                        // Custom terminator; \r \n \xNN escapes allowed
+    int     frameIdleMs      = 20;                  // Idle gap
+    int     frameFixedLength = 16;                  // Fixed length
+    QString encoding         = QStringLiteral("Auto");
+
     // --- log saving (off until the user turns it on) ---
     bool    logEnabled  = false;
     QString logDir;                                 // empty = App::defaultLogDir()
-    QString logTemplate = App::DEFAULT_TEMPLATE;
+    QString logTemplate = App::DEFAULT_TEMPLATE;    // names each session's folder
+    // Kept only so a v1.3 build reading this file finds what it expects;
+    // every session now gets a folder of its own, so there is nothing to
+    // append to.
     bool    logAppend   = true;
+    qint64  retentionSecs  = 12 * 3600;             // 0 = keep forever
+    qint64  retentionBytes = 1024LL * 1024 * 1024;  // 0 = no size limit
 
     // --- terminal ---
     bool    autoscroll    = true;

@@ -1,56 +1,212 @@
 #include "lineassembler.h"
 
-LineAssembler::LineAssembler()
+// ------------------------------------------------------------------- Framing
+
+const QStringList &Framing::modeNames()
 {
-    reset();
+    static const QStringList names = {
+        QStringLiteral("Auto (CR / LF / CRLF)"),
+        QStringLiteral("Custom terminator"),
+        QStringLiteral("Idle gap"),
+        QStringLiteral("Fixed length"),
+        QStringLiteral("None"),
+    };
+    return names;
+}
+
+Framing::Mode Framing::modeFromName(const QString &name)
+{
+    const int i = modeNames().indexOf(name);
+    return i < 0 ? Mode::Auto : static_cast<Mode>(i);
+}
+
+QByteArray Framing::parseTerminator(const QString &text)
+{
+    const QByteArray in = text.toUtf8();
+    QByteArray out;
+    for (int i = 0; i < in.size(); ++i) {
+        const char c = in.at(i);
+        if (c != '\\' || i + 1 >= in.size()) {
+            out.append(c);
+            continue;
+        }
+        const char e = in.at(++i);
+        switch (e) {
+        case 'r':  out.append('\r'); break;
+        case 'n':  out.append('\n'); break;
+        case 't':  out.append('\t'); break;
+        case '0':  out.append('\0'); break;
+        case '\\': out.append('\\'); break;
+        case 'x': {
+            bool ok = false;
+            const int v = in.mid(i + 1, 2).toInt(&ok, 16);
+            if (!ok || i + 2 >= in.size())
+                return {};
+            out.append(static_cast<char>(v));
+            i += 2;
+            break;
+        }
+        default:
+            return {};
+        }
+    }
+    return out;
+}
+
+// ------------------------------------------------------------- LineAssembler
+
+void LineAssembler::setFraming(const Framing &framing)
+{
+    m_framing = framing;
+    // A terminator that has been typed away to nothing would never match, so
+    // the stream would only ever be cut by the length cap; Auto is the
+    // reasonable thing to fall back to.
+    if (m_framing.mode == Framing::Mode::Terminator && m_framing.terminator.isEmpty())
+        m_framing.mode = Framing::Mode::Auto;
+    if (m_framing.fixedLength < 1)
+        m_framing.fixedLength = 1;
+    if (m_framing.maxLineBytes < 16)
+        m_framing.maxLineBytes = 16;
 }
 
 void LineAssembler::reset()
 {
     m_buf.clear();
-    m_lastEnding = QChar();
-    m_rxTimer.start();
+    m_flushed = 0;
+    m_lastEnding = 0;
+    m_lastRxMs = 0;
 }
 
-QStringList LineAssembler::feed(const QByteArray &data)
+void LineAssembler::emitComplete(QVector<AssembledLine> *out, quint8 extraFlags)
 {
-    QStringList out;
-    out.reserve(data.size() / 40 + 1);
+    AssembledLine line;
+    if (m_flushed > 0) {
+        // The front of this line is already on screen. Send only what is new,
+        // plus the whole line for anything that has to see it complete --
+        // filter views, and later the matcher -- so nothing is matched twice
+        // and nothing is matched on half a line.
+        line.bytes = m_buf.mid(qMin(m_flushed, int(m_buf.size())));
+        line.whole = m_buf;
+        line.flags = LineFlag::Continuation | extraFlags;
+    } else {
+        line.bytes = m_buf;
+        line.flags = extraFlags;
+    }
+    out->append(line);
+    m_buf.clear();
+    m_flushed = 0;
+}
 
-    for (const char raw : data) {
-        // latin-1 decode: every byte maps to exactly one code point
-        const QChar ch(static_cast<ushort>(static_cast<unsigned char>(raw)));
+void LineAssembler::emitPartial(QVector<AssembledLine> *out)
+{
+    AssembledLine line;
+    line.bytes = m_buf.mid(m_flushed);
+    line.flags = LineFlag::Partial | (m_flushed > 0 ? LineFlag::Continuation : 0);
+    out->append(line);
+    m_flushed = m_buf.size();
+}
 
-        if (ch == QLatin1Char('\r') || ch == QLatin1Char('\n')) {
-            // second half of a CRLF / LFCR pair: swallow it
-            if (!m_lastEnding.isNull() && ch != m_lastEnding) {
-                m_lastEnding = QChar();
-                continue;
+void LineAssembler::appendByte(char c, QVector<AssembledLine> *out)
+{
+    switch (m_framing.mode) {
+    case Framing::Mode::Auto:
+        if (c == '\r' || c == '\n') {
+            // Second half of a CRLF / LFCR pair: swallow it.
+            if (m_lastEnding && c != m_lastEnding) {
+                m_lastEnding = 0;
+                return;
             }
-            m_lastEnding = ch;
-            out.append(m_buf);
-            m_buf.clear();
-        } else {
-            m_lastEnding = QChar();
-            m_buf.append(ch);
+            m_lastEnding = c;
+            emitComplete(out);
+            return;
         }
+        m_lastEnding = 0;
+        m_buf.append(c);
+        break;
+
+    case Framing::Mode::Terminator:
+        m_buf.append(c);
+        if (m_buf.endsWith(m_framing.terminator)) {
+            m_buf.chop(m_framing.terminator.size());
+            // The start of the terminator may already have gone out in a
+            // partial; it cannot be taken back, only not counted twice.
+            m_flushed = qMin(m_flushed, int(m_buf.size()));
+            emitComplete(out);
+            return;
+        }
+        break;
+
+    case Framing::Mode::FixedLength:
+        m_buf.append(c);
+        if (m_buf.size() >= m_framing.fixedLength) {
+            emitComplete(out);
+            return;
+        }
+        break;
+
+    case Framing::Mode::IdleGap:
+    case Framing::Mode::None:
+        m_buf.append(c);
+        break;
     }
 
-    m_rxTimer.restart();
+    // Runaway output -- a binary stream read as text, or a device that never
+    // ends a line -- must not grow one record without bound.
+    if (m_buf.size() >= m_framing.maxLineBytes)
+        emitComplete(out, LineFlag::Split);
+}
+
+QVector<AssembledLine> LineAssembler::feed(const QByteArray &data, qint64 nowMs)
+{
+    QVector<AssembledLine> out;
+    out.reserve(data.size() / 40 + 1);
+
+    // In idle-gap framing the pause *before* this chunk is what ends the
+    // previous record, so check it before the new bytes join the buffer.
+    if (m_framing.mode == Framing::Mode::IdleGap && !m_buf.isEmpty()
+        && nowMs - m_lastRxMs >= m_framing.idleGapMs) {
+        emitComplete(&out);
+    }
+
+    for (const char c : data)
+        appendByte(c, &out);
+
+    m_lastRxMs = nowMs;
     return out;
 }
 
-QString LineAssembler::takePartial()
+QVector<AssembledLine> LineAssembler::poll(qint64 nowMs)
 {
-    const QString s = m_buf;
-    m_buf.clear();
-    return s;
+    QVector<AssembledLine> out;
+    if (m_buf.isEmpty())
+        return out;
+
+    const qint64 quiet = nowMs - m_lastRxMs;
+
+    if (m_framing.mode == Framing::Mode::IdleGap && quiet >= m_framing.idleGapMs) {
+        emitComplete(&out);
+        return out;
+    }
+
+    // An unterminated line that has gone quiet is shown as-is, so prompts
+    // without a newline still appear.
+    if (m_buf.size() > m_flushed && quiet >= m_framing.quietFlushMs)
+        emitPartial(&out);
+    return out;
 }
 
-qint64 LineAssembler::msSinceLastRx() const
+QVector<AssembledLine> LineAssembler::drain()
 {
-    return m_rxTimer.elapsed();
+    QVector<AssembledLine> out;
+    if (m_buf.size() > m_flushed)
+        emitPartial(&out);
+    m_buf.clear();
+    m_flushed = 0;
+    m_lastEnding = 0;
+    return out;
 }
+
+// ---------------------------------------------------------------- ANSI spans
 
 namespace {
 

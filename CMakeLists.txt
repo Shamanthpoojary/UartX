@@ -9,11 +9,13 @@ if(APPLE)
     set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE STRING "macOS architectures")
 endif()
 
-project(UartX VERSION 1.3.0 LANGUAGES CXX)
+project(UartX VERSION 1.4.0 LANGUAGES CXX)
 
 # Qt 6.2 is the floor so the Qt versions bundled with current LTS toolchains
 # work unchanged (Ubuntu 22.04 ships 6.2; Debian 12 and Ubuntu 24.04 ship 6.4).
-find_package(Qt6 6.2 REQUIRED COMPONENTS Core Gui Widgets)
+find_package(Qt6 6.2 REQUIRED COMPONENTS Core Gui Widgets Network)
+
+option(UARTX_BUILD_TESTS "Build the automated tests" ON)
 
 # qt_standard_project_setup() arrived in Qt 6.3; do the same by hand when the
 # available Qt predates it.
@@ -56,23 +58,48 @@ set(APP_BUNDLE_ID   "com.shamanth.uartx")
 # src/serialport.h interface. Linux and macOS share the POSIX backend.
 # ---------------------------------------------------------------------------
 
+# The data path -- framing, decoding, the pipeline thread, the log store --
+# needs no widgets, so it is built once as a library that both the app and
+# the tests link. A test can then drive the real pipeline without a window.
+set(UARTX_CORE_SOURCES
+    src/linerecord.h
+    src/lineassembler.cpp       src/lineassembler.h
+    src/textdecoder.cpp         src/textdecoder.h
+    src/lineformat.cpp          src/lineformat.h
+    src/colorrules.cpp          src/colorrules.h
+    src/textfilters.cpp         src/textfilters.h
+    src/logstore.cpp            src/logstore.h
+    src/logretention.cpp        src/logretention.h
+    src/recentring.h
+    src/linequery.cpp           src/linequery.h
+    src/pipeline.cpp            src/pipeline.h
+    src/appconstants.h
+)
+
+add_library(uartx_core STATIC ${UARTX_CORE_SOURCES})
+target_include_directories(uartx_core PUBLIC src)
+target_link_libraries(uartx_core PUBLIC Qt::Core Qt::Gui)
+# PUBLIC, so every target that includes appconstants.h sees the same version:
+# App::VERSION is an inline variable, and two definitions of it would leave
+# the linker to pick one.
+target_compile_definitions(uartx_core PUBLIC APP_VERSION_STRING="${PROJECT_VERSION}")
+
 set(UARTX_SOURCES
     src/main.cpp
     src/mainwindow.cpp          src/mainwindow.h
+    src/session.cpp             src/session.h
+    src/agentbridge.h
+    src/controlserver.cpp       src/controlserver.h
+    src/agentpanel.cpp          src/agentpanel.h
     src/terminalview.cpp        src/terminalview.h
     src/filterwindow.cpp        src/filterwindow.h
     src/colorrulesdialog.cpp    src/colorrulesdialog.h
-    src/colorrules.cpp          src/colorrules.h
-    src/textfilters.cpp         src/textfilters.h
     src/ribbon.cpp              src/ribbon.h
     src/theme.cpp               src/theme.h
     src/dialogs.cpp             src/dialogs.h
     src/serialworker.cpp        src/serialworker.h
     src/serialport.h
-    src/lineformat.cpp          src/lineformat.h
-    src/lineassembler.cpp       src/lineassembler.h
     src/configstore.cpp         src/configstore.h
-    src/appconstants.h
 )
 
 if(WIN32)
@@ -111,7 +138,21 @@ qt_add_resources(UartX "app_resources"
         resources/icons/check.png
 )
 
-target_link_libraries(UartX PRIVATE Qt::Core Qt::Gui Qt::Widgets)
+target_link_libraries(UartX PRIVATE uartx_core Qt::Core Qt::Gui Qt::Widgets Qt::Network)
+
+# uartx-ctl: the agent API's command-line client. A console program of its
+# own, because a GUI-subsystem executable on Windows has no usable stdout --
+# and stdout is the whole interface an agent like Claude Code reads.
+qt_add_executable(uartx-ctl tools/uartx-ctl/main.cpp)
+target_include_directories(uartx-ctl PRIVATE src)
+target_compile_definitions(uartx-ctl PRIVATE APP_VERSION_STRING="${PROJECT_VERSION}")
+target_link_libraries(uartx-ctl PRIVATE Qt::Core Qt::Network)
+set_target_properties(uartx-ctl PROPERTIES WIN32_EXECUTABLE OFF MACOSX_BUNDLE OFF)
+
+if(UARTX_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
 
 # --- Windows: executable icon + version metadata (Properties > Details)
 if(WIN32)
@@ -155,6 +196,9 @@ install(TARGETS UartX
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     BUNDLE  DESTINATION .
 )
+# Beside UartX, so it shares the deployed Qt libraries and `uartx-ctl launch`
+# finds the app next to itself.
+install(TARGETS uartx-ctl RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 if(MINGW)
     # The executable imports libgcc and libstdc++ directly, so a package

@@ -4,6 +4,7 @@
 #include "colorrules.h"
 #include "textfilters.h"
 #include "lineformat.h"
+#include "linequery.h"
 
 #include <QWidget>
 #include <QDialog>
@@ -20,6 +21,7 @@ class QTimer;
 class QVBoxLayout;
 class QGroupBox;
 class QPushButton;
+class QScrollArea;
 
 /// Editor for a single text filter: label, the text to match, match-case.
 class TextFilterEditDialog : public QDialog
@@ -85,10 +87,29 @@ public:
 
     /// Live feed from the main window (upcoming data only). Matching uses the
     /// record's raw text, so filters keep working in any display mode.
-    void onLine(const LineRecord &record);
+    void onLine(const DisplayLine &record);
 
     /// Rebuilds both selection lists after the rules or filters change.
     void refreshSources(const ColorRuleSet &rules, const TextFilterSet &filters);
+
+    /// Turns this into a view an agent asked for: it shows the lines matching
+    /// `query`, says who made it and why, and hides the user's rule and filter
+    /// checklists, which do not apply to it. The user can still read, search,
+    /// save, undock and close it.
+    void makeAgentView(const QString &owner, const QString &id, const QString &name,
+                       const LineQuery &query);
+    bool isAgentOwned() const { return m_agentOwned; }
+    QString agentId() const { return m_agentId; }
+    QString agentOwner() const { return m_agentOwner; }
+    QString agentName() const { return m_agentName; }
+    /// The short name a tab shows.
+    QString tabTitle() const { return m_agentOwned ? QStringLiteral("AI \u00b7 ") + m_agentName : m_title; }
+    const LineQuery &agentQuery() const { return m_agentQuery; }
+    int shownCount() const { return m_shown; }
+
+    /// Fills the view from lines that arrived before it was opened, so an
+    /// agent's view is useful at once instead of starting empty.
+    void backfill(const QVector<DisplayLine> &lines);
 
     /// Writes the visible lines, preceded by a header recording the filter
     /// settings that produced them. Separated from the Save action so the
@@ -111,8 +132,8 @@ private slots:
     void findPrevious();
 
 private:
-    bool matches(const LineRecord &record) const;
-    void append(const LineRecord &record);
+    bool matches(const DisplayLine &record) const;
+    void append(const DisplayLine &record);
     void runSearch(bool backwards, bool fromCursor);
     void updateSearchStatus();
     void updateDockButton();
@@ -120,6 +141,7 @@ private:
     void setCount(const QString &text);
     void showTemporaryNotice(const QString &message);
     QString buildHeader() const;
+    void fitControlBar();
     int  checkedFilterIndex() const;   // the single ticked text filter, or -1
     QSet<QString> checkedNames(const QHash<QString, QCheckBox *> &boxes) const;
 
@@ -143,6 +165,15 @@ private:
     QTimer      *m_noticeTimer  = nullptr;
     QPushButton *m_dockBtn      = nullptr;
     QLabel      *m_titleLabel   = nullptr;
+    QScrollArea *m_barScroll    = nullptr;
+    QWidget     *m_ruleBox      = nullptr;
+    QWidget     *m_filterBox    = nullptr;
+
+    bool         m_agentOwned   = false;
+    QString      m_agentOwner;
+    QString      m_agentId;
+    QString      m_agentName;
+    LineQuery    m_agentQuery;
     QString      m_title;
     bool         m_docked       = true;
 

@@ -9,6 +9,7 @@
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QScrollArea>
+#include <QScrollBar>
 #include <QCheckBox>
 #include <QLineEdit>
 #include <QLabel>
@@ -158,8 +159,9 @@ FilterWindow::FilterWindow(MainWindow *app, const QString &title)
 
     m_titleLabel = new QLabel(title, this);
     m_titleLabel->setObjectName(QStringLiteral("fieldLabel"));
-    titleRow->addWidget(m_titleLabel);
-    titleRow->addStretch(1);
+    // A long title must not decide how narrow the docked view can be.
+    m_titleLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    titleRow->addWidget(m_titleLabel, 1);
 
     m_dockBtn = new QPushButton(this);
     m_dockBtn->setFixedWidth(104);
@@ -173,12 +175,25 @@ FilterWindow::FilterWindow(MainWindow *app, const QString &title)
 
     root->addLayout(titleRow);
 
-    auto *bar = new QHBoxLayout;
+    // The controls scroll sideways when the view is narrow -- docked at a
+    // quarter of the window, say -- instead of forcing the view wider than
+    // the terminal it sits beside.
+    auto *barHost = new QWidget(this);
+    auto *bar = new QHBoxLayout(barHost);
+    bar->setContentsMargins(0, 0, 0, 0);
     bar->setSpacing(10);
-    root->addLayout(bar);
+    m_barScroll = new QScrollArea(this);
+    m_barScroll->setWidget(barHost);
+    m_barScroll->setWidgetResizable(true);
+    m_barScroll->setFrameShape(QFrame::NoFrame);
+    m_barScroll->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_barScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_barScroll->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+    root->addWidget(m_barScroll);
 
     // ------------------------------------------------------- colour rules
     auto *ruleBox = new QGroupBox(tr("Color rules"), this);
+    m_ruleBox = ruleBox;
     auto *ruleOuter = new QVBoxLayout(ruleBox);
     ruleOuter->setContentsMargins(10, 6, 10, 8);
     ruleOuter->addWidget(makeCheckList(ruleBox, &m_ruleLayout));
@@ -186,6 +201,7 @@ FilterWindow::FilterWindow(MainWindow *app, const QString &title)
 
     // -------------------------------------------------------- text filters
     auto *filterBox = new QGroupBox(tr("Text filters"), this);
+    m_filterBox = filterBox;
     auto *filterOuter = new QHBoxLayout(filterBox);
     filterOuter->setContentsMargins(10, 6, 10, 8);
     filterOuter->setSpacing(10);
@@ -262,21 +278,22 @@ FilterWindow::FilterWindow(MainWindow *app, const QString &title)
     });
     bottom->addWidget(m_autoscrollBox);
 
+    // The count sits between the checkbox and the buttons and gives way
+    // first, so a narrow docked view never has text running into a button.
+    m_countLabel = new QLabel(m_baseCount, this);
+    m_countLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    m_countLabel->setAlignment(Qt::AlignCenter);
+    bottom->addWidget(m_countLabel, 1);
+
     auto *clearBtn = new QPushButton(tr("Clear"), this);
-    clearBtn->setFixedWidth(88);
     connect(clearBtn, &QPushButton::clicked, this, &FilterWindow::clearView);
     bottom->addWidget(clearBtn);
 
-    auto *saveBtn = new QPushButton(tr("Save output..."), this);
-    saveBtn->setFixedWidth(124);
+    auto *saveBtn = new QPushButton(tr("Save..."), this);
     saveBtn->setToolTip(tr("Write the filtered lines shown here to a file, "
                            "with a header recording the filter settings"));
     connect(saveBtn, &QPushButton::clicked, this, &FilterWindow::saveOutput);
     bottom->addWidget(saveBtn);
-
-    bottom->addStretch(1);
-    m_countLabel = new QLabel(m_baseCount, this);
-    bottom->addWidget(m_countLabel);
     root->addLayout(bottom);
 
     m_noticeTimer = new QTimer(this);
@@ -288,6 +305,17 @@ FilterWindow::FilterWindow(MainWindow *app, const QString &title)
 
     refreshSources(m_app->colorRules(), m_app->textFilters());
     updateDockButton();
+    fitControlBar();
+}
+
+void FilterWindow::fitControlBar()
+{
+    // Tall enough for the controls plus a horizontal scroll bar, which only
+    // appears when the view is too narrow to show them all.
+    QWidget *host = m_barScroll->widget();
+    host->adjustSize();
+    const int bar = m_barScroll->horizontalScrollBar()->sizeHint().height();
+    m_barScroll->setFixedHeight(host->sizeHint().height() + bar);
 }
 
 // ---------------------------------------------------------- selection lists
@@ -388,8 +416,52 @@ int FilterWindow::checkedFilterIndex() const
 
 // --------------------------------------------------------------- filtering
 
-bool FilterWindow::matches(const LineRecord &record) const
+void FilterWindow::makeAgentView(const QString &owner, const QString &id, const QString &name,
+                                 const LineQuery &query)
 {
+    m_agentOwned = true;
+    m_agentOwner = owner;
+    m_agentId = id;
+    m_agentName = name;
+    m_agentQuery = query;
+
+    // An agent's view is defined by its query, not by the user's checklists,
+    // so those are hidden rather than left there doing nothing.
+    m_ruleBox->hide();
+    m_filterBox->hide();
+    fitControlBar();
+
+    const QString who = owner.left(1).toUpper() + owner.mid(1);
+    m_title = QStringLiteral("%1: %2").arg(who, name);
+    setWindowTitle(QStringLiteral("%1 - %2").arg(m_title, App::NAME));
+    // The badge says, at a glance, that the user did not make this view.
+    m_titleLabel->setTextFormat(Qt::RichText);
+    // The tab already carries the name; the strip says who made the view and
+    // what it matches, which is what the user needs to trust what it shows.
+    m_titleLabel->setText(
+        QStringLiteral("<span style='background:#6f42c1; color:white;'>&nbsp;AI&nbsp;</span>"
+                       "&nbsp;<span style='color:#b0b0b0;'>%1 · lines matching %2</span>")
+            .arg(who.toHtmlEscaped(), query.describe().toHtmlEscaped()));
+    m_titleLabel->setWordWrap(true);
+    m_titleLabel->setToolTip(tr("Opened by %1. It shows only the lines matching %2.\n"
+                                "You can search, save, undock or close it; closing it tells %1.")
+                                 .arg(who, query.describe()));
+}
+
+void FilterWindow::backfill(const QVector<DisplayLine> &lines)
+{
+    m_text->beginBatch();
+    for (const DisplayLine &line : lines)
+        if (matches(line))
+            append(line);
+    m_text->endBatch();
+}
+
+bool FilterWindow::matches(const DisplayLine &record) const
+{
+    if (m_agentOwned)
+        return m_agentQuery.matches(record.raw);
+
     const QSet<QString> rules   = checkedNames(m_ruleBoxes);
     const QSet<QString> filters = checkedNames(m_filterBoxes);
 
@@ -419,13 +491,13 @@ bool FilterWindow::matches(const LineRecord &record) const
     return false;
 }
 
-void FilterWindow::onLine(const LineRecord &record)
+void FilterWindow::onLine(const DisplayLine &record)
 {
     if (matches(record))
         append(record);
 }
 
-void FilterWindow::append(const LineRecord &record)
+void FilterWindow::append(const DisplayLine &record)
 {
     if (!record.spans.isEmpty())
         m_text->appendSpans(record.prefix, QColor(App::TERM_META),
@@ -627,6 +699,10 @@ QString FilterWindow::buildHeader() const
 
     QString h;
     h += QStringLiteral("===== %1 %2 - filtered output =====\n").arg(App::NAME, App::VERSION);
+    if (m_agentOwned) {
+        h += QStringLiteral("View          : %1 (opened by %2)\n").arg(m_title, m_agentOwner);
+        h += QStringLiteral("Shows         : lines matching %1\n").arg(m_agentQuery.describe());
+    }
     h += QStringLiteral("Saved         : %1\n")
              .arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss")));
     h += QStringLiteral("Source        : %1 @ %2 baud\n")
