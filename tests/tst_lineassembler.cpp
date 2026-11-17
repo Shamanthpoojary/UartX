@@ -56,10 +56,10 @@ private slots:
     void binaryBytesAreKept()
     {
         LineAssembler a;
-        const QByteArray data("\x00\x01\xFF\x1B[31mX\n", 9);
+        const QByteArray data("\x00\x01\xFF\x1B[31mX\n", 10);
         const auto lines = a.feed(data, 0);
         QCOMPARE(lines.size(), 1);
-        QCOMPARE(lines[0].bytes, data.left(8));
+        QCOMPARE(lines[0].bytes, data.left(9));
     }
 
     void quietFlushThenContinuation()
