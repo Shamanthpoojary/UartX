@@ -96,6 +96,13 @@ AgentPanel::AgentPanel(QWidget *parent)
     root->addLayout(buttons);
 
     connect(m_list, &QListWidget::currentRowChanged, this, &AgentPanel::showLinesFor);
+    // Selection can change without the current row moving -- keyboard
+    // extension, accessibility tools -- and the evidence must follow it.
+    connect(m_list, &QListWidget::itemSelectionChanged, this, [this] {
+        const QList<QListWidgetItem *> sel = m_list->selectedItems();
+        if (!sel.isEmpty())
+            showLinesFor(m_list->row(sel.first()));
+    });
 
     setAgentName(QStringLiteral("Claude"), false);
     renderFindings();

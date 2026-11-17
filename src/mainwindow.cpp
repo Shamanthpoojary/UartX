@@ -45,6 +45,7 @@
 #include <QPointer>
 #include <QJsonArray>
 #include <QThread>
+#include <QElapsedTimer>
 #include <QTabWidget>
 #include <QFileDialog>
 #include <QSaveFile>
@@ -271,6 +272,8 @@ void MainWindow::buildUi()
     m_splitter->addWidget(m_dockTabs);
     m_splitter->setStretchFactor(0, 3);
     m_splitter->setStretchFactor(1, 1);
+    m_splitter->installEventFilter(this);   // to size the side panel once it is laid out
+    connect(m_splitter, &QSplitter::splitterMoved, this, [this] { m_dockUserSized = true; });
     root->addWidget(m_splitter, 1);
 
     m_statusLabel = new QLabel(m_currentStatus, this);
@@ -912,6 +915,8 @@ void MainWindow::recallHistory(int direction)
 
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 {
+    if (watched == m_splitter && event->type() == QEvent::Resize)
+        applyDockSize();
     if (watched == m_txInput && event->type() == QEvent::KeyPress) {
         auto *key = static_cast<QKeyEvent *>(event);
         if (key->key() == Qt::Key_Up) {
@@ -1150,16 +1155,31 @@ void MainWindow::openFilterWindow()
 
 void MainWindow::showDockPanel()
 {
-    if (m_dockTabs->isVisible())
+    // isHidden, not isVisible: before the window is first shown nothing is
+    // "visible", and the panel would be shown -- and sized -- twice.
+    if (!m_dockTabs->isHidden())
         return;
     m_dockTabs->show();
     // A quarter of the width: enough to read a filtered line, while the full
-    // stream keeps the space. Applied once the panel is laid out; after that
-    // the divider is the user's to move, and is left where they put it.
-    QTimer::singleShot(0, this, [this] {
-        const int total = qMax(m_splitter->width(), 800);
-        m_splitter->setSizes({ total * 3 / 4, total / 4 });
-    });
+    // stream keeps the space. Applied once the splitter has its real width --
+    // when an agent starts UartX the panel exists before the window is even
+    // shown -- and after that the divider is the user's to move.
+    m_dockSizePending = true;
+    applyDockSize();
+}
+
+void MainWindow::applyDockSize()
+{
+    // Held at three quarters / one quarter through every resize -- the window
+    // is laid out small and then maximised, and the splitter would otherwise
+    // hand most of the new width to the panel -- until the user drags the
+    // divider. From then on it is theirs.
+    if (m_dockUserSized || m_dockTabs->isHidden() || !m_splitter->isVisible()
+        || m_splitter->width() < 400)
+        return;
+    m_dockSizePending = false;
+    const int total = m_splitter->width() - m_splitter->handleWidth();
+    m_splitter->setSizes({ total * 3 / 4, total - total * 3 / 4 });
 }
 
 void MainWindow::hideDockPanelIfEmpty()
@@ -1335,7 +1355,18 @@ void MainWindow::stopAgentApi()
         return;
     QThread *thread = m_controlThread;
     m_controlThread = nullptr;
+    // stop() must run before the thread's loop ends: it answers waiting
+    // agents with APP_EXITED and removes runtime.json. Quitting first let the
+    // loop exit with stop() still queued, leaving both undone. It is queued,
+    // not blocking, because the control thread may itself be waiting on this
+    // window -- so this window keeps serving it until stop() has run.
     QMetaObject::invokeMethod(m_control, "stop", Qt::QueuedConnection);
+    QElapsedTimer stopping;
+    stopping.start();
+    while (!m_control->isStopped() && stopping.elapsed() < 3000) {
+        QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+        QThread::msleep(5);
+    }
     thread->quit();
     // The control thread may be in the middle of a blocking call into this
     // window; keep serving those while it winds down, or each would wait on
@@ -1648,15 +1679,14 @@ QJsonObject MainWindow::agentAction(const QString &agent, const QString &method,
         if (text.isEmpty())
             return agentError(QStringLiteral("INVALID_PATTERN"), tr("a note needs text"));
         // The explanation is what a person who relies on the agent reads
-        // first: it goes to the top of the findings tab, the tab comes to the
-        // front, a one-line marker shows where in the stream it was written,
-        // and the full text goes into lines.log beside the data it explains.
-        const QString who = agentDisplayName(agent);
+        // first: it goes into the findings tab, the tab comes to the front,
+        // and the text is recorded in the session -- so it shows in the
+        // terminal once, at the point in the stream where it was written,
+        // and lands in lines.log beside the data it explains.
         if (m_agentPanel) {
             m_agentPanel->addFinding(text);
             m_dockTabs->setCurrentWidget(m_agentPanel);
         }
-        appendAgentLine(tr("\U0001F4AC %1 added a finding — see the %1 tab").arg(who), App::TERM_NOTE);
         if (m_session)
             m_session->recordSystem(QStringLiteral("note from %1: %2").arg(agent, text));
         return QJsonObject{ { "shown", true } };

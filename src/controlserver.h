@@ -10,6 +10,7 @@
 #include <QPointer>
 #include <QString>
 #include <QVector>
+#include <atomic>
 #include <memory>
 
 class QLocalServer;
@@ -48,6 +49,9 @@ public:
     ControlServer(std::shared_ptr<AgentBridge> bridge, AgentHost *host, QObject *hostObject,
                   bool agentMode);
     ~ControlServer() override;
+
+    /// True once stop() has finished. Readable from any thread.
+    bool isStopped() const { return m_stopped.load(); }
 
     /// Where uartx-ctl looks for the endpoint and token.
     static QString runtimeFilePath();
@@ -91,6 +95,7 @@ private:
     QTimer                      *m_waitTimer = nullptr;
     QString                      m_token;
     bool                         m_agentMode = false;
+    std::atomic_bool             m_stopped { false };
     QString                      m_endpoint;
     QHash<QLocalSocket *, std::shared_ptr<Client>> m_clients;
     QVector<std::shared_ptr<Wait>> m_waits;
