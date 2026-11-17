@@ -67,11 +67,10 @@ void Session::stopWorker()
     SerialWorker *worker = m_worker;
     m_worker = nullptr;        // callers test m_worker; nothing may reach it now
 
-    // A worker we have abandoned must not deliver anything else: its queued
-    // events would otherwise arrive after the session was torn down.
+    // The window has already moved on, so its status must not be overwritten
+    // by the worker's last words. The pipeline still wants them: the final
+    // "disconnected" belongs in the log, and finish() is queued behind it.
     worker->disconnect(this);
-    if (m_pipeline)
-        worker->disconnect(m_pipeline);
     worker->stop();
 
     if (worker->wait(WORKER_STOP_TIMEOUT_MS)) {
@@ -81,7 +80,10 @@ void Session::stopWorker()
 
     // It is still inside run(). Destroying it now would abort the process, so
     // hand it to Qt to delete itself once it really finishes. It owns nothing
-    // shared, so outliving this call costs nothing.
+    // shared, so outliving this call costs nothing -- but whatever it says
+    // from here on would arrive after the log is closed, so cut it off.
+    if (m_pipeline)
+        worker->disconnect(m_pipeline);
     connect(worker, &QThread::finished, worker, &QObject::deleteLater);
 }
 
