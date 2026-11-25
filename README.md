@@ -463,6 +463,8 @@ issue — use the contact form:
 
 It reaches me directly, and the subject arrives tagged as UartX.
 
+If UartX saves you time, a ⭐ on GitHub helps other firmware engineers find it.
+
 ## Licence
 
 [MIT](LICENSE) · Copyright (c) 2026 Shamanth
